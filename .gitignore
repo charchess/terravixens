@@ -1,0 +1,44 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+tfplan
+*.tfplan
+
+# Kubeconfig and Talosconfig (sensitive)
+kubeconfig-*
+talosconfig-*
+
+# Terraform lock file (commit this in production, but exclude for homelab)
+.terraform.lock.hcl
+
+# Environment variables
+.env
+.envrc
+!.envrc.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Secrets
+.secrets/

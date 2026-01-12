@@ -1,0 +1,23 @@
+# ============================================================================
+# TERRAFORM S3 BACKEND CREDENTIALS
+# ============================================================================
+# Copy this file to .envrc and configure with your actual credentials
+#
+# Usage with direnv (recommended):
+#   1. Install direnv: https://direnv.net/
+#   2. Copy: cp .envrc.example .envrc
+#   3. Edit .envrc with actual credentials
+#   4. Run: direnv allow
+#
+# Usage without direnv:
+#   source .envrc
+#
+# IMPORTANT: .envrc is gitignored and should NEVER be committed
+# ============================================================================
+
+# S3 Backend Credentials (Minio)
+export AWS_ACCESS_KEY_ID="terraform"
+export AWS_SECRET_ACCESS_KEY="terraform"
+
+# Optional: Uncomment to see Terraform debug output
+# export TF_LOG=DEBUG
