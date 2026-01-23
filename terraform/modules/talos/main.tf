@@ -115,11 +115,28 @@ data "talos_machine_configuration" "control_plane" {
 data "talos_client_configuration" "this" {
   cluster_name         = var.cluster_name
   client_configuration = talos_machine_secrets.cluster.client_configuration
-  endpoints            = [local.vip_address]
-  nodes = concat(
-    [for k, v in var.control_plane_nodes : local.control_plane_vlan111_ips[k]],
-    [for k, v in var.worker_nodes : local.worker_vlan_ips[k]]
-  )
+  endpoints            = [local.vip_address] # Always use VIP for endpoint
+  nodes = [
+    for k, v in var.control_plane_nodes : local.control_plane_vlan111_ips[k]
+  ]
+}
+
+# Control plane nodes configuration auto-detection
+data "external" "control_plane_endpoint" {
+  for_each = var.control_plane_nodes
+
+  program = ["bash", "-c", <<-EOT
+    VLAN_IP="${local.control_plane_vlan_ips[each.key]}"
+    MAINTENANCE_IP="${each.value.ip_address}"
+
+    # Test if node responds on VLAN IP (already configured)
+    if timeout 2 bash -c "echo > /dev/tcp/$VLAN_IP/50000" 2>/dev/null; then
+      echo "{\"ip\": \"$VLAN_IP\", \"status\": \"configured\"}"
+    else
+      echo "{\"ip\": \"$MAINTENANCE_IP\", \"status\": \"new\"}"
+    fi
+  EOT
+  ]
 }
 
 resource "talos_machine_configuration_apply" "control_plane" {
@@ -127,17 +144,17 @@ resource "talos_machine_configuration_apply" "control_plane" {
 
   client_configuration        = talos_machine_secrets.cluster.client_configuration
   machine_configuration_input = data.talos_machine_configuration.control_plane[each.key].machine_configuration
-  # Use VLAN IP (routable) instead of maintenance IP for configuration apply
-  # Maintenance IPs are only accessible during initial PXE boot, not after Talos config
-  node     = local.control_plane_vlan_ips[each.key]
-  endpoint = local.control_plane_vlan_ips[each.key]
+  # Auto-detect: use VLAN IP if node already configured, maintenance IP if new/reset
+  node     = data.external.control_plane_endpoint[each.key].result.ip
+  endpoint = data.external.control_plane_endpoint[each.key].result.ip
 }
 
 resource "talos_machine_bootstrap" "this" {
   depends_on = [
     talos_machine_configuration_apply.control_plane
   ]
-  node                 = [for k, v in var.control_plane_nodes : local.control_plane_vlan_ips[k]][0]
+  # Use the first control plane node's detected IP for bootstrap
+  node                 = [for k, v in var.control_plane_nodes : data.external.control_plane_endpoint[k].result.ip][0]
   client_configuration = talos_machine_secrets.cluster.client_configuration
 }
 
@@ -146,7 +163,10 @@ resource "talos_cluster_kubeconfig" "this" {
     talos_machine_bootstrap.this
   ]
   client_configuration = talos_machine_secrets.cluster.client_configuration
-  node                 = [for k, v in var.control_plane_nodes : local.control_plane_vlan_ips[k]][0]
+  # Use the first control plane node's detected IP to fetch kubeconfig
+  node = [for k, v in var.control_plane_nodes : data.external.control_plane_endpoint[k].result.ip][0]
+  # BUT ensure the kubeconfig file itself points to the VIP
+  endpoint = local.vip_address
 }
 
 # Automatic node reset on destroy - Control Plane
@@ -192,9 +212,33 @@ EOF
       echo "Node ${self.triggers.node_ip} reset initiated"
     EOT
   }
+
+  lifecycle {
+    ignore_changes = [triggers]
+  }
 }
 
 # Worker nodes configuration
+
+# Auto-detect if worker is already configured (reachable on VLAN IP)
+# If not reachable on VLAN, use maintenance IP for initial bootstrap
+data "external" "worker_endpoint" {
+  for_each = var.worker_nodes
+
+  program = ["bash", "-c", <<-EOT
+    VLAN_IP="${local.worker_vlan_ips[each.key]}"
+    MAINTENANCE_IP="${each.value.ip_address}"
+
+    # Test if node responds on VLAN IP (already configured)
+    if timeout 2 bash -c "echo > /dev/tcp/$VLAN_IP/50000" 2>/dev/null; then
+      echo "{\"ip\": \"$VLAN_IP\", \"status\": \"configured\"}"
+    else
+      echo "{\"ip\": \"$MAINTENANCE_IP\", \"status\": \"new\"}"
+    fi
+  EOT
+  ]
+}
+
 locals {
   worker_patches = {
     for k, v in var.worker_nodes : k => yamlencode({
@@ -258,9 +302,9 @@ resource "talos_machine_configuration_apply" "worker" {
 
   client_configuration        = talos_machine_secrets.cluster.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[each.key].machine_configuration
-  # Use VLAN IP (routable) instead of maintenance IP for configuration apply
-  node     = local.worker_vlan_ips[each.key]
-  endpoint = local.worker_vlan_ips[each.key]
+  # Auto-detect: use VLAN IP if node already configured, maintenance IP if new
+  node     = data.external.worker_endpoint[each.key].result.ip
+  endpoint = data.external.worker_endpoint[each.key].result.ip
 }
 
 # Automatic node reset on destroy - Workers
@@ -306,6 +350,15 @@ EOF
       echo "Worker node ${self.triggers.node_ip} reset initiated"
     EOT
   }
+
+  lifecycle {
+    ignore_changes = [triggers]
+  }
+}
+
+# Sequential upgrade management for Control Plane
+locals {
+  cp_node_names_list = sort(keys(var.control_plane_nodes))
 }
 
 # Automatic Talos upgrade when talos_version or talos_image changes - Control Plane
@@ -317,6 +370,11 @@ resource "null_resource" "control_plane_upgrade" {
     talos_version = var.talos_version
     talos_image   = var.talos_image
     node_ip       = local.control_plane_vlan_ips[each.key]
+    
+    # Logic to force sequential execution without cyclic dependencies
+    # Each node (except the first) waits for the previous one in the sorted list
+    # by depending on its apply configuration, but we manually sequence the PROVISIONER
+    wait_for_previous = index(local.cp_node_names_list, each.key) > 0 ? local.cp_node_names_list[index(local.cp_node_names_list, each.key) - 1] : "none"
   }
 
   # Upgrade must happen after node is configured and bootstrapped
@@ -339,17 +397,32 @@ EOF
       # Determine image to use
       IMAGE="${var.talos_image != "" ? var.talos_image : format("ghcr.io/siderolabs/installer:%s", var.talos_version)}"
 
+      # Manual sequencing for safety
+      if [ "${self.triggers.wait_for_previous}" != "none" ]; then
+        echo "Waiting for previous node ${self.triggers.wait_for_previous} to be Ready before upgrading ${self.triggers.node_ip}..."
+        # Wait until the previous node is responding on port 50000 (Talos API)
+        until timeout 2 bash -c "echo > /dev/tcp/${local.control_plane_vlan_ips[self.triggers.wait_for_previous]}/50000" 2>/dev/null; do
+          sleep 10
+        done
+        echo "Previous node is UP. Waiting 30s for etcd stability..."
+        sleep 30
+      fi
+
       echo "Upgrading node ${self.triggers.node_ip} to $IMAGE..."
       talosctl upgrade \
         --nodes ${self.triggers.node_ip} \
         --endpoints ${self.triggers.node_ip} \
         --image "$IMAGE" \
         --preserve=true \
-        --wait=false
+        --wait=true
 
-      # Cleanup temp file
+      echo "Node ${self.triggers.node_ip} upgrade initiated. Waiting for node to come back..."
+      until timeout 2 bash -c "echo > /dev/tcp/${self.triggers.node_ip}/50000" 2>/dev/null; do
+        sleep 10
+      done
+      
+      echo "Node ${self.triggers.node_ip} is back. Finalizing upgrade step."
       rm -f $TEMP_TALOSCONFIG
-      echo "Node ${self.triggers.node_ip} upgrade initiated"
     EOT
   }
 }

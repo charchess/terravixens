@@ -15,6 +15,7 @@ resource "helm_release" "cilium" {
   timeout       = var.timeout
 
   values = [yamlencode({
+    installCRDs = true
     kubeProxyReplacement = true
     k8sServiceHost       = "localhost"
     k8sServicePort       = 7445
@@ -121,7 +122,24 @@ resource "null_resource" "wait_for_cilium_crds" {
 # CILIUM L2 ANNOUNCEMENTS RESOURCES
 # --------------------------------------------------------------------------
 resource "kubectl_manifest" "cilium_ip_pool" {
-  yaml_body = file(var.ip_pool_yaml_path)
+  yaml_body = yamlencode({
+    apiVersion = "cilium.io/v2alpha1"
+    kind       = "CiliumLoadBalancerIPPool"
+    metadata = {
+      name = var.cilium_l2.pool_name
+    }
+    spec = {
+      blocks = [
+        for range in var.cilium_l2.pool_ips : {
+          start = split("-", range)[0]
+          stop  = split("-", range)[1]
+        }
+      ]
+      serviceSelector = {
+        matchLabels = {}
+      }
+    }
+  })
 
   depends_on = [
     null_resource.wait_for_cilium_crds
@@ -129,7 +147,24 @@ resource "kubectl_manifest" "cilium_ip_pool" {
 }
 
 resource "kubectl_manifest" "cilium_l2_policy" {
-  yaml_body = file(var.l2_policy_yaml_path)
+  yaml_body = yamlencode({
+    apiVersion = "cilium.io/v2alpha1"
+    kind       = "CiliumL2AnnouncementPolicy"
+    metadata = {
+      name = var.cilium_l2.policy_name
+    }
+    spec = {
+      externalIPs     = true
+      loadBalancerIPs = true
+      interfaces      = var.cilium_l2.interfaces
+      nodeSelector = {
+        matchLabels = var.cilium_l2.node_selector
+      }
+      serviceSelector = {
+        matchLabels = {}
+      }
+    }
+  })
 
   depends_on = [
     kubectl_manifest.cilium_ip_pool

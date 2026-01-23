@@ -119,15 +119,27 @@ variable "argocd" {
 }
 
 # --------------------------------------------------------------------------
+# CILIUM L2 ANNOUNCEMENTS
+# --------------------------------------------------------------------------
+variable "cilium_l2" {
+  description = "Cilium L2 Announcements configuration"
+  type = object({
+    pool_name     = string
+    pool_ips      = list(string)
+    policy_name   = string
+    interfaces    = list(string)
+    node_selector = map(string)
+  })
+}
+
+# --------------------------------------------------------------------------
 # FILE PATHS
 # --------------------------------------------------------------------------
 variable "paths" {
   description = "File paths for generated configurations"
   type = object({
-    kubeconfig            = string
-    talosconfig           = string
-    cilium_ip_pool_yaml   = string
-    cilium_l2_policy_yaml = string
-    infisical_secret      = string
+    kubeconfig       = string
+    talosconfig      = string
+    infisical_secret = string
   })
 }

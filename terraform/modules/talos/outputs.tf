@@ -18,6 +18,14 @@ output "control_plane_configs" {
   sensitive = true
 }
 
+output "worker_configs" {
+  description = "Talos machine configurations for worker nodes"
+  value = {
+    for k, v in data.talos_machine_configuration.worker : k => v.machine_configuration
+  }
+  sensitive = true
+}
+
 output "cluster_endpoint" {
   description = "Kubernetes API endpoint"
   value       = var.cluster_endpoint
@@ -46,6 +54,11 @@ output "kubernetes_ca_certificate" {
   description = "Base64 encoded CA certificate for Helm provider"
   value       = talos_cluster_kubeconfig.this.kubernetes_client_configuration.ca_certificate
   sensitive   = true
+}
+
+output "debug_vlan111_ips" {
+  description = "Debug: VLAN 111 IPs used for talosconfig"
+  value       = local.control_plane_vlan111_ips
 }
 
 # Debug: Output node patches to verify nameservers are included

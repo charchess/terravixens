@@ -69,19 +69,23 @@ variable "wait_for_k8s_api" {
 }
 
 # --------------------------------------------------------------------------
+# CILIUM L2 ANNOUNCEMENTS
+# --------------------------------------------------------------------------
+variable "cilium_l2" {
+  description = "Cilium L2 Announcements configuration"
+  type = object({
+    pool_name     = string
+    pool_ips      = list(string)
+    policy_name   = string
+    interfaces    = list(string)
+    node_selector = map(string)
+  })
+}
+
+# --------------------------------------------------------------------------
 # FILE PATHS
 # --------------------------------------------------------------------------
 variable "kubeconfig_path" {
   description = "Path to kubeconfig file"
-  type        = string
-}
-
-variable "ip_pool_yaml_path" {
-  description = "Path to CiliumLoadBalancerIPPool YAML"
-  type        = string
-}
-
-variable "l2_policy_yaml_path" {
-  description = "Path to CiliumL2AnnouncementPolicy YAML"
   type        = string
 }

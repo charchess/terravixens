@@ -13,4 +13,5 @@ module "environment" {
   worker_nodes        = var.worker_nodes
   paths               = var.paths
   argocd              = var.argocd
+  cilium_l2           = var.cilium_l2
 }
