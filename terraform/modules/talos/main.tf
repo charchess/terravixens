@@ -73,28 +73,28 @@ locals {
   # Extract VLAN IP with gateway (routable IP) for each control plane node
   # This is used for talosctl reset during destroy, as nodes are not reachable on maintenance IPs
   control_plane_vlan_ips = {
-    for k, v in var.control_plane_nodes : k => [
-      for vlan in v.network.vlans :
-      split("/", vlan.addresses[0])[0]
-      if vlan.gateway != ""
-    ][0]
+    for k, v in var.control_plane_nodes : k => try(
+      [for vlan in v.network.vlans : split("/", vlan.addresses[0])[0] if vlan.gateway != ""][0], # Try routable first
+      [for vlan in v.network.vlans : split("/", vlan.addresses[0])[0] if vlan.vlanId == 111][0], # Try VLAN 111 second
+      split("/", v.network.vlans[0].addresses[0])[0], # Fallback to any VLAN address
+      v.ip_address # Final fallback to maintenance IP
+    )
   }
 
   control_plane_vlan111_ips = {
-    for k, v in var.control_plane_nodes : k => [
-      for vlan in v.network.vlans :
-      split("/", vlan.addresses[0])[0]
-      if vlan.vlanId == 111
-    ][0]
+    for k, v in var.control_plane_nodes : k => try(
+      [for vlan in v.network.vlans : split("/", vlan.addresses[0])[0] if vlan.vlanId == 111][0],
+      v.ip_address
+    )
   }
 
   # Extract VLAN IP with gateway for each worker node
   worker_vlan_ips = {
-    for k, v in var.worker_nodes : k => [
-      for vlan in v.network.vlans :
-      split("/", vlan.addresses[0])[0]
-      if vlan.gateway != ""
-    ][0]
+    for k, v in var.worker_nodes : k => try(
+      [for vlan in v.network.vlans : split("/", vlan.addresses[0])[0] if vlan.gateway != ""][0],
+      split("/", v.network.vlans[0].addresses[0])[0],
+      v.ip_address
+    )
   }
 }
 
@@ -398,10 +398,11 @@ EOF
       IMAGE="${var.talos_image != "" ? var.talos_image : format("ghcr.io/siderolabs/installer:%s", var.talos_version)}"
 
       # Manual sequencing for safety
+      PREVIOUS_IP="${lookup(local.control_plane_vlan_ips, self.triggers.wait_for_previous, "")}"
       if [ "${self.triggers.wait_for_previous}" != "none" ]; then
-        echo "Waiting for previous node ${self.triggers.wait_for_previous} to be Ready before upgrading ${self.triggers.node_ip}..."
+        echo "Waiting for previous node ${self.triggers.wait_for_previous} ($PREVIOUS_IP) to be Ready before upgrading ${self.triggers.node_ip}..."
         # Wait until the previous node is responding on port 50000 (Talos API)
-        until timeout 2 bash -c "echo > /dev/tcp/${local.control_plane_vlan_ips[self.triggers.wait_for_previous]}/50000" 2>/dev/null; do
+        until timeout 2 bash -c "echo > /dev/tcp/$PREVIOUS_IP/50000" 2>/dev/null; do
           sleep 10
         done
         echo "Previous node is UP. Waiting 30s for etcd stability..."
