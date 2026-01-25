@@ -26,24 +26,15 @@ variable "git_branch" {
 # CLUSTER CONFIGURATION
 # --------------------------------------------------------------------------
 variable "cluster" {
-  description = "Talos cluster configuration"
+  description = "Cluster global settings"
   type = object({
     name               = string
     endpoint           = string
+    vip                = string
     talos_version      = string
     talos_image        = string
     kubernetes_version = string
   })
-
-  validation {
-    condition     = can(regex("^https://.*:6443$", var.cluster.endpoint))
-    error_message = "Cluster endpoint must be a valid Kubernetes API URL (https://...6443)"
-  }
-
-  validation {
-    condition     = can(regex("^v\\d+\\.\\d+\\.\\d+$", var.cluster.talos_version))
-    error_message = "Talos version must be in format vX.Y.Z"
-  }
 }
 
 # --------------------------------------------------------------------------

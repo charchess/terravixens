@@ -10,6 +10,7 @@ module "talos_cluster" {
   talos_image         = var.cluster.talos_image
   kubernetes_version  = var.cluster.kubernetes_version
   cluster_endpoint    = var.cluster.endpoint
+  cluster_vip         = var.cluster.vip
   control_plane_nodes = var.control_plane_nodes
   worker_nodes        = var.worker_nodes
 }
@@ -27,6 +28,11 @@ resource "local_file" "talosconfig" {
   content         = module.talos_cluster.talosconfig
   filename        = var.paths.talosconfig
   file_permission = "0600"
+
+  # Ensure this is written even if subsequent cluster resources fail
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # ----------------------------------------------------------------------------

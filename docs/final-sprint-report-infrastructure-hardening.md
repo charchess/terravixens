@@ -33,7 +33,13 @@ The platform was subjected to a battery of "Chaos" tests:
 *   **K8s Version:** v1.34.0
 *   **Management:** ArgoCD installed and ready (neutral branch).
 
-## 5. Handoff & Next Steps
+## 5. Operational Lessons Learned (The etcd Quorum Gap)
+During the stress testing phase, we identified a critical operational gap in the current Scale-In process:
+*   **The Issue:** When reducing the number of Control Plane nodes (e.g., from 3 to 1), Terraform successfully triggers a `talosctl reset` on the target nodes. However, the remaining node(s) still expect the removed members to be part of the etcd quorum.
+*   **The Impact:** The cluster enters a "No Leader" state because the remaining members cannot achieve a majority based on the old member list.
+*   **The Fix:** A Scale-In operation must be preceded or accompanied by an explicit `talosctl etcd remove` command for each departing member.
+
+## 6. Handoff & Next Steps
 The infrastructure is now stable. Future sprints should focus on:
 1.  Deploying production workloads via the `vixens` GitOps repository.
 2.  Implementing persistent storage (Synology CSI) integration.

@@ -81,3 +81,7 @@ variable "service_subnet" {
   type        = string
   default     = "10.96.0.0/12"
 }
+variable "cluster_vip" {
+  description = "Virtual IP for the cluster API"
+  type        = string
+}
