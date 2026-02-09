@@ -96,6 +96,7 @@ variable "argocd" {
     insecure          = bool
     disable_auth      = bool
     anonymous_enabled = bool
+    self_heal         = optional(bool, true)
   })
 
   validation {

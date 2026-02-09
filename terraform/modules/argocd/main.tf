@@ -125,6 +125,7 @@ resource "kubectl_manifest" "argocd_root_app" {
     environment     = var.environment
     target_revision = var.git_branch
     overlay_path    = "argocd/overlays/${var.environment}"
+    self_heal       = var.argocd_config.self_heal
   })
 
   depends_on = [

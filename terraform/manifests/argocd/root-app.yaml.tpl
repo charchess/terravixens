@@ -9,6 +9,7 @@
 #   - environment: ${environment}
 #   - target_revision: ${target_revision}
 #   - overlay_path: ${overlay_path}
+#   - self_heal: ${self_heal}
 
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -32,4 +33,4 @@ spec:
   syncPolicy:
     automated:
       prune: true
-      selfHeal: true
+      selfHeal: ${self_heal}
