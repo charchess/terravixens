@@ -18,13 +18,9 @@ resource "kubernetes_namespace" "argocd" {
 # 1. CORE ENGINE (SEED)
 # ----------------------------------------------------------------------------
 # Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
-data "kubectl_file_documents" "argocd_install" {
-  content = file("${path.module}/bootstrap/install.yaml")
-}
-
 resource "kubectl_manifest" "argocd_core" {
-  for_each  = data.kubectl_file_documents.argocd_install.manifests
-  yaml_body = each.value
+  for_each  = fileset("${path.module}/bootstrap/manifests", "*.yaml")
+  yaml_body = file(each.value)
 
   # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
   # Terraform is only responsible for the INITIAL installation of the engine.
