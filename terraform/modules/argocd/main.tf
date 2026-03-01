@@ -5,11 +5,19 @@
 # to GitOps via the App-of-Apps pattern.
 
 # ----------------------------------------------------------------------------
+# 0. NAMESPACE
+# ----------------------------------------------------------------------------
+# Ensure the ArgoCD namespace exists before creating any resources in it.
+resource "kubernetes_namespace" "argocd" {
+  metadata {
+    name = var.namespace
+  }
+}
+
+# ----------------------------------------------------------------------------
 # 1. CORE ENGINE (SEED)
 # ----------------------------------------------------------------------------
 # Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
-# We use kubectl_file_documents to split the large YAML and apply it efficiently.
-
 data "kubectl_file_documents" "argocd_install" {
   content = file("${path.module}/bootstrap/install.yaml")
 }
@@ -25,6 +33,7 @@ resource "kubectl_manifest" "argocd_core" {
   }
 
   depends_on = [
+    kubernetes_namespace.argocd,
     var.cilium_module
   ]
 }
