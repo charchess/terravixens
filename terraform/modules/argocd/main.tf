@@ -1,96 +1,66 @@
 # ============================================================================
-# ARGOCD MODULE - OPTIMIZED WITH DRY PRINCIPLE
+# ARGOCD MODULE - SELF-MANAGED BOOTSTRAP (v3.3.0)
 # ============================================================================
-# Eliminates duplication by using shared tolerations and typed configurations
+# This module bootstraps ArgoCD from a local manifest and hands over control
+# to GitOps via the App-of-Apps pattern.
 
-resource "helm_release" "argocd" {
-  name             = "argocd"
-  repository       = "https://argoproj.github.io/argo-helm"
-  chart            = "argo-cd"
-  version          = var.chart_version
-  namespace        = var.namespace
-  create_namespace = true
+# ----------------------------------------------------------------------------
+# 1. CORE ENGINE (SEED)
+# ----------------------------------------------------------------------------
+# Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
+# We use kubectl_file_documents to split the large YAML and apply it efficiently.
 
-  wait          = true
-  wait_for_jobs = true
-  timeout       = var.timeout
+data "kubectl_file_documents" "argocd_install" {
+  content = file("${path.module}/bootstrap/install.yaml")
+}
 
-  values = [yamlencode({
-    server = {
-      config = {
-        url = "http://${var.argocd_config.loadbalancer_ip}"
-      }
-      extraArgs = concat(
-        var.argocd_config.insecure ? ["--insecure"] : [],
-        var.argocd_config.disable_auth ? ["--disable-auth"] : []
-      )
-      service = {
-        type           = var.argocd_config.service_type
-        loadBalancerIP = var.argocd_config.service_type == "LoadBalancer" ? var.argocd_config.loadbalancer_ip : null
-        annotations = {
-          "environment"           = var.environment
-          "io.cilium/lb-ipam-ips" = var.argocd_config.loadbalancer_ip
-        }
-      }
-      ingress = {
-        enabled          = false
-        ingressClassName = "traefik"
-        hosts            = [var.argocd_config.hostname]
-        paths            = ["/"]
-        annotations = {
-          "traefik.ingress.kubernetes.io/router.entrypoints" = "web"
-        }
-      }
-      tolerations = var.control_plane_tolerations
-    }
+resource "kubectl_manifest" "argocd_core" {
+  for_each  = data.kubectl_file_documents.argocd_install.manifests
+  yaml_body = each.value
 
-    # DRY: Apply same tolerations to all components
-    repoServer      = { tolerations = var.control_plane_tolerations }
-    controller      = { tolerations = var.control_plane_tolerations }
-    redis           = { tolerations = var.control_plane_tolerations }
-    applicationSet  = { tolerations = var.control_plane_tolerations }
-    notifications   = { tolerations = var.control_plane_tolerations }
-    redisSecretInit = { tolerations = var.control_plane_tolerations }
-
-    dex = {
-      enabled = false
-    }
-
-    configs = {
-      params = {
-        "server.insecure" = var.argocd_config.insecure
-      }
-      cm = {
-        "users.anonymous.enabled" = var.argocd_config.anonymous_enabled ? "true" : "false"
-        "url"                     = "http://${var.argocd_config.loadbalancer_ip}"
-        "policy.csv"              = <<-EOT
-          p, role:readonly, applications, get, */*, allow
-          p, role:readonly, applications, list, */*, allow
-          p, role:readonly, clusters, get, *, allow
-          p, role:readonly, repositories, get, *, allow
-          p, role:readonly, repositories, list, *, allow
-          p, role:readonly, projects, get, *, allow
-          p, role:readonly, projects, list, *, allow
-          g, anonymous, role:readonly
-          g, default, role:readonly
-        EOT
-      }
-      rbac = {
-        create        = true
-        policyDefault = "role:readonly"
-      }
-    }
-  })]
+  # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
+  # Terraform is only responsible for the INITIAL installation of the engine.
+  lifecycle {
+    ignore_changes = all
+  }
 
   depends_on = [
     var.cilium_module
   ]
 }
 
-# --------------------------------------------------------------------------
-# INFISICAL UNIVERSAL AUTH SECRET (BOOTSTRAP)
-# --------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# 2. INITIAL CONFIGURATION (INSECURE / NO-AUTH)
+# ----------------------------------------------------------------------------
+# To ensure immediate access after the bootstrap, we inject the insecure/no-auth
+# settings directly into the ConfigMap. This overrides any default from the manifest.
+
+resource "kubectl_manifest" "argocd_params_bootstrap" {
+  yaml_body = <<-EOF
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: argocd-cmd-params-cm
+      namespace: ${var.namespace}
+      labels:
+        app.kubernetes.io/name: argocd-cmd-params-cm
+        app.kubernetes.io/part-of: argocd
+        managed-by: terraform
+    data:
+      server.insecure: "${var.argocd_config.insecure ? "true" : "false"}"
+      server.disable.auth: "${var.argocd_config.disable_auth ? "true" : "false"}"
+  EOF
+
+  # Ensure the ConfigMap exists before we try to patch it or rely on it
+  depends_on = [kubectl_manifest.argocd_core]
+}
+
+# ----------------------------------------------------------------------------
+# 3. INFISICAL UNIVERSAL AUTH SECRET (BOOTSTRAP)
+# ----------------------------------------------------------------------------
 # Deploy Infisical credentials secret before root-app to enable InfisicalSecret CRDs
+# This is a prerequisite for ArgoCD to sync apps that use Infisical secrets.
+
 resource "kubernetes_secret_v1" "infisical_universal_auth" {
   count = var.infisical_secret_path != "" ? 1 : 0
 
@@ -112,14 +82,16 @@ resource "kubernetes_secret_v1" "infisical_universal_auth" {
   type = "Opaque"
 
   depends_on = [
-    helm_release.argocd,
-    var.cilium_module
+    kubectl_manifest.argocd_core
   ]
 }
 
-# --------------------------------------------------------------------------
-# ROOT APPLICATION (App-of-Apps)
-# --------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# 4. ROOT APPLICATION (ACTIVATION)
+# ----------------------------------------------------------------------------
+# This creates the Application named 'vixens-app-of-apps'.
+# It points ArgoCD to Git for full self-management.
+
 resource "kubectl_manifest" "argocd_root_app" {
   yaml_body = templatefile(var.root_app_template_path, {
     environment     = var.environment
@@ -129,7 +101,7 @@ resource "kubectl_manifest" "argocd_root_app" {
   })
 
   depends_on = [
-    helm_release.argocd,
+    kubectl_manifest.argocd_params_bootstrap,
     kubernetes_secret_v1.infisical_universal_auth
   ]
 }
