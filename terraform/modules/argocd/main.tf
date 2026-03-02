@@ -18,6 +18,7 @@ locals {
   argocd_manifests = [
     for f in fileset("${path.module}/bootstrap/manifests", "*.yaml") :
     f
+    if !contains(["applications-argoproj-io.yaml", "applicationsets-argoproj-io.yaml", "appprojects-argoproj-io.yaml"], f)
   ]
 }
 
