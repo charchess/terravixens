@@ -14,6 +14,13 @@ resource "kubernetes_namespace" "argocd" {
   }
 }
 
+locals {
+  argocd_manifests = [
+    for f in fileset("${path.module}/bootstrap/manifests", "*.yaml") :
+    f
+  ]
+}
+
 # ----------------------------------------------------------------------------
 # 1. CRDs (apply with kubectl --server-side for large CRDs)
 # ----------------------------------------------------------------------------
@@ -26,7 +33,7 @@ resource "null_resource" "argocd_crds" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
+      kubectl apply --server-side -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
     EOT
   }
 
@@ -38,27 +45,7 @@ resource "null_resource" "argocd_crds" {
 # ----------------------------------------------------------------------------
 # Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
 resource "kubectl_manifest" "argocd_core" {
-  for_each = fileset("${path.module}/bootstrap/manifests", "*.yaml")
-
-  # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
-  # Terraform is only responsible for the INITIAL installation of the engine.
-  lifecycle {
-    ignore_changes = all
-  }
-
-  depends_on = [
-    kubernetes_namespace.argocd,
-    null_resource.argocd_crds,
-    var.cilium_module
-  ]
-}
-
-# ----------------------------------------------------------------------------
-# 2. CORE ENGINE (SEED)
-# ----------------------------------------------------------------------------
-# Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
-resource "kubectl_manifest" "argocd_core" {
-  for_each  = fileset("${path.module}/bootstrap/manifests", "!(applications*|appprojects*).yaml")
+  for_each  = toset(local.argocd_manifests)
   yaml_body = file("${path.module}/bootstrap/manifests/${each.value}")
 
   # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
@@ -69,7 +56,7 @@ resource "kubectl_manifest" "argocd_core" {
 
   depends_on = [
     kubernetes_namespace.argocd,
-    kubectl_manifest.argocd_crds,
+    null_resource.argocd_crds,
     var.cilium_module
   ]
 }
