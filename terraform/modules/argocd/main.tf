@@ -12,6 +12,13 @@ resource "kubernetes_namespace" "argocd" {
   metadata {
     name = var.namespace
   }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      KUBECONFIG=${var.kubeconfig_path} kubectl get namespace ${var.namespace} 2>/dev/null && kubectl delete namespace ${var.namespace} --grace-period=30 --wait=false 2>/dev/null || true
+    EOT
+  }
 }
 
 locals {
@@ -33,8 +40,16 @@ resource "null_resource" "argocd_crds" {
   ])
 
   provisioner "local-exec" {
+    when    = create
     command = <<-EOT
       KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      KUBECONFIG=${var.kubeconfig_path} kubectl delete crd $(basename ${each.value} .yaml | sed 's/-/./g') --ignore-not-found=true 2>/dev/null || true
     EOT
   }
 
