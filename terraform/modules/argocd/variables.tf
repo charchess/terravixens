@@ -37,6 +37,11 @@ variable "argocd_config" {
     anonymous_enabled = bool
     self_heal         = optional(bool, true)
   })
+
+  validation {
+    condition     = var.argocd_config.loadbalancer_ip == "192.168.208.71"
+    error_message = "LoadBalancer IP must be 192.168.208.71 to match hardcoded value in bootstrap/manifests/argocd-server-service.yaml:12"
+  }
 }
 
 # --------------------------------------------------------------------------

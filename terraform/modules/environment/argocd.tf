@@ -26,3 +26,12 @@ module "argocd" {
     module.cilium
   ]
 }
+
+# Cross-validation: Ensure LoadBalancer IP in tfvars matches hardcoded manifest value
+# This prevents runtime errors from IP mismatch between Terraform config and ArgoCD manifests
+check "argocd_loadbalancer_ip_consistency" {
+  assert {
+    condition     = var.argocd.loadbalancer_ip == "192.168.208.71"
+    error_message = "ArgoCD LoadBalancer IP in terraform.tfvars must be 192.168.208.71 to match the hardcoded value in argocd-server-service.yaml"
+  }
+}

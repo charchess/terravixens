@@ -25,7 +25,7 @@ fi
 echo "Sending graceful reset signal to Talos API..."
 # We use --graceful=true to ensure etcd leave member is called.
 # We use --reboot to return to maintenance mode.
-talosctl --talosconfig ./talosconfig-dev -n "${NODE_IP}" -e "${NODE_IP}" reset --graceful=true --reboot --system-labels-selection-all || {
+talosctl --talosconfig ./talosconfig-dev -n "${NODE_IP}" -e "${NODE_IP}" reset --graceful=true --reboot --wipe-mode=all || {
     echo "Warning: Graceful reset failed (Node might be already down). Forcing local state cleanup."
 }
 

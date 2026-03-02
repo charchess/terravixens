@@ -12,10 +12,6 @@ resource "kubernetes_namespace" "argocd" {
   metadata {
     name = "argocd"
   }
-
-  lifecycle {
-    ignore_changes = [metadata]
-  }
 }
 
 locals {
@@ -40,6 +36,78 @@ resource "null_resource" "argocd_crds" {
   }
 
   depends_on = [kubernetes_namespace.argocd, var.cilium_module]
+}
+
+# ----------------------------------------------------------------------------
+# 1b. PRE-DESTROY CLEANUP
+# ----------------------------------------------------------------------------
+# This resource ensures proper cleanup order during destroy:
+# 1. Delete ArgoCD Applications (with finalizers)
+# 2. Delete ArgoCD CRDs
+# 3. Wait for namespace to be empty
+# This prevents namespace stuck in "Terminating" state.
+
+resource "null_resource" "argocd_pre_destroy_cleanup" {
+  # Triggers ensure this resource is recreated when critical components change
+  triggers = {
+    kubeconfig_path = var.kubeconfig_path
+    namespace       = var.namespace
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    on_failure = continue # Don't block destroy if cleanup fails
+    command    = <<-EOT
+      set -e
+      
+      KUBECONFIG="${self.triggers.kubeconfig_path}"
+      NAMESPACE="${self.triggers.namespace}"
+      
+      echo "=== ArgoCD Pre-Destroy Cleanup Started ==="
+      
+      # Step 1: Delete all ArgoCD Applications (these have finalizers that block namespace deletion)
+      echo "Step 1/4: Deleting ArgoCD Applications..."
+      kubectl --kubeconfig "$KUBECONFIG" delete applications.argoproj.io \
+        --all -n "$NAMESPACE" \
+        --grace-period=30 \
+        --timeout=3m \
+        2>/dev/null || echo "Warning: No applications found or already deleted"
+      
+      # Step 2: Wait for Applications to be fully deleted
+      echo "Step 2/4: Waiting for Applications to be deleted..."
+      kubectl --kubeconfig "$KUBECONFIG" wait \
+        --for=delete applications.argoproj.io \
+        --all -n "$NAMESPACE" \
+        --timeout=2m \
+        2>/dev/null || echo "Warning: Wait timed out or no applications"
+      
+      # Step 3: Delete ArgoCD CRDs (must be done before namespace deletion)
+      echo "Step 3/4: Deleting ArgoCD CRDs..."
+      kubectl --kubeconfig "$KUBECONFIG" delete crd \
+        applications.argoproj.io \
+        applicationsets.argoproj.io \
+        appprojects.argoproj.io \
+        --ignore-not-found=true \
+        --timeout=2m \
+        2>/dev/null || echo "Warning: CRDs already deleted or not found"
+      
+      # Step 4: Wait for CRDs to be fully removed
+      echo "Step 4/4: Waiting for CRDs to be deleted..."
+      for crd in applications.argoproj.io applicationsets.argoproj.io appprojects.argoproj.io; do
+        kubectl --kubeconfig "$KUBECONFIG" wait --for=delete crd "$crd" --timeout=1m 2>/dev/null || true
+      done
+      
+      echo "=== ArgoCD Pre-Destroy Cleanup Completed ==="
+    EOT
+  }
+
+  # This resource must be destroyed AFTER all ArgoCD resources are destroyed
+  # but BEFORE the CRDs and namespace are destroyed
+  depends_on = [
+    kubectl_manifest.argocd_root_app,
+    kubectl_manifest.argocd_params_bootstrap,
+    kubectl_manifest.argocd_core
+  ]
 }
 
 # ----------------------------------------------------------------------------
