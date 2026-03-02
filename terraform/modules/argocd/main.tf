@@ -55,16 +55,6 @@ resource "null_resource" "argocd_crds" {
   depends_on = [kubernetes_namespace.argocd, var.cilium_module]
 }
 
-  provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
-      KUBECONFIG=${var.kubeconfig_path} kubectl delete crd $(basename ${each.value} .yaml | sed 's/-/./g') --ignore-not-found=true 2>/dev/null || true
-    EOT
-  }
-
-  depends_on = [kubernetes_namespace.argocd, var.cilium_module]
-}
-
 # ----------------------------------------------------------------------------
 # 2. CORE ENGINE (SEED)
 # ----------------------------------------------------------------------------
