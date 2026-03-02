@@ -33,7 +33,7 @@ resource "null_resource" "argocd_crds" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
+      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
     EOT
   }
 
