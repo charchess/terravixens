@@ -12,6 +12,10 @@ resource "kubernetes_namespace" "argocd" {
   metadata {
     name = "argocd"
   }
+
+  lifecycle {
+    ignore_changes = [metadata]
+  }
 }
 
 locals {
