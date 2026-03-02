@@ -32,11 +32,10 @@ locals {
 resource "null_resource" "argocd_crds" {
 
   provisioner "local-exec" {
-    when    = create
     command = <<-EOT
-      for crd in applications.argoproj.io applicationsets.argoproj.io appprojects.argoproj.io; do
-        KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/${crd}.yaml" --field-manager=terraform --validate=false 2>/dev/null || true
-      done
+      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/applications-argoproj-io.yaml" --field-manager=terraform --validate=false 2>/dev/null || true
+      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/applicationsets-argoproj-io.yaml" --field-manager=terraform --validate=false 2>/dev/null || true
+      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/appprojects-argoproj-io.yaml" --field-manager=terraform --validate=false 2>/dev/null || true
     EOT
   }
 
