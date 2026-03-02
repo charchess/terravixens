@@ -15,21 +15,41 @@ resource "kubernetes_namespace" "argocd" {
 }
 
 # ----------------------------------------------------------------------------
-# 1. CRDs (must be applied first with server-side apply for large CRDs)
+# 1. CRDs (apply with kubectl --server-side for large CRDs)
 # ----------------------------------------------------------------------------
-resource "kubectl_manifest" "argocd_crds" {
+resource "null_resource" "argocd_crds" {
   for_each = toset([
     "applications-argoproj-io.yaml",
     "applicationsets-argoproj-io.yaml",
     "appprojects-argoproj-io.yaml"
   ])
-  yaml_body = file("${path.module}/bootstrap/manifests/${each.value}")
 
-  server_side_apply = true
-  field_manager     = "terraform"
+  provisioner "local-exec" {
+    command = <<-EOT
+      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
+    EOT
+  }
+
+  depends_on = [kubernetes_namespace.argocd]
+}
+
+# ----------------------------------------------------------------------------
+# 2. CORE ENGINE (SEED)
+# ----------------------------------------------------------------------------
+# Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
+resource "kubectl_manifest" "argocd_core" {
+  for_each = fileset("${path.module}/bootstrap/manifests", "*.yaml")
+
+  # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
+  # Terraform is only responsible for the INITIAL installation of the engine.
+  lifecycle {
+    ignore_changes = all
+  }
 
   depends_on = [
-    kubernetes_namespace.argocd
+    kubernetes_namespace.argocd,
+    null_resource.argocd_crds,
+    var.cilium_module
   ]
 }
 
@@ -77,7 +97,7 @@ resource "kubectl_manifest" "argocd_params_bootstrap" {
   EOF
 
   # Ensure the ConfigMap exists before we try to patch it or rely on it
-  depends_on = [kubectl_manifest.argocd_crds, kubectl_manifest.argocd_core]
+  depends_on = [null_resource.argocd_crds, kubectl_manifest.argocd_core]
 }
 
 # ----------------------------------------------------------------------------
@@ -107,7 +127,7 @@ resource "kubernetes_secret_v1" "infisical_universal_auth" {
   type = "Opaque"
 
   depends_on = [
-    kubectl_manifest.argocd_crds,
+    null_resource.argocd_crds,
     kubectl_manifest.argocd_core
   ]
 }
@@ -127,7 +147,7 @@ resource "kubectl_manifest" "argocd_root_app" {
   })
 
   depends_on = [
-    kubectl_manifest.argocd_crds,
+    null_resource.argocd_crds,
     kubectl_manifest.argocd_params_bootstrap,
     kubernetes_secret_v1.infisical_universal_auth
   ]
