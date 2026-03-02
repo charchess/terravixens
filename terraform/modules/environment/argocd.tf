@@ -18,6 +18,7 @@ module "argocd" {
   # Infisical bootstrap secret (optional)
   infisical_secret_path = var.paths.infisical_secret
 
+  kubeconfig_path        = var.paths.kubeconfig
   cilium_module          = module.cilium
   root_app_template_path = "${path.module}/../../manifests/argocd/root-app.yaml.tpl"
 
