@@ -10,13 +10,13 @@
 # Ensure the ArgoCD namespace exists before creating any resources in it.
 resource "kubernetes_namespace" "argocd" {
   metadata {
-    name = var.namespace
+    name = "argocd"
   }
 
   provisioner "local-exec" {
     when    = destroy
     command = <<-EOT
-      KUBECONFIG=${var.kubeconfig_path} kubectl get namespace ${var.namespace} 2>/dev/null && kubectl delete namespace ${var.namespace} --grace-period=30 --wait=false 2>/dev/null || true
+      KUBECONFIG=${var.kubeconfig_path} kubectl get namespace argocd 2>/dev/null && kubectl delete namespace argocd --grace-period=30 --wait=false 2>/dev/null || true
     EOT
   }
 }
@@ -33,18 +33,27 @@ locals {
 # 1. CRDs (apply with kubectl --server-side for large CRDs)
 # ----------------------------------------------------------------------------
 resource "null_resource" "argocd_crds" {
-  for_each = toset([
-    "applications-argoproj-io.yaml",
-    "applicationsets-argoproj-io.yaml",
-    "appprojects-argoproj-io.yaml"
-  ])
 
   provisioner "local-exec" {
     when    = create
     command = <<-EOT
-      KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/${each.value}" --field-manager=terraform --validate=false
+      for crd in applications.argoproj.io applicationsets.argoproj.io appprojects.argoproj.io; do
+        KUBECONFIG=${var.kubeconfig_path} kubectl apply --server-side --force-conflicts -f "${path.module}/bootstrap/manifests/${crd}.yaml" --field-manager=terraform --validate=false 2>/dev/null || true
+      done
     EOT
   }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      for crd in applications.argoproj.io applicationsets.argoproj.io appprojects.argoproj.io; do
+        KUBECONFIG=${var.kubeconfig_path} kubectl delete crd $crd --ignore-not-found=true 2>/dev/null || true
+      done
+    EOT
+  }
+
+  depends_on = [kubernetes_namespace.argocd, var.cilium_module]
+}
 
   provisioner "local-exec" {
     when    = destroy
