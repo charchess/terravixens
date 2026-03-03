@@ -6,6 +6,7 @@ metadata:
     app.kubernetes.io/component: server
     app.kubernetes.io/name: argocd-server
     app.kubernetes.io/part-of: argocd
+    vixens.io/sizing: small
   name: argocd-server
 spec:
   selector:
@@ -15,6 +16,8 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: argocd-server
+        app: argocd-server
+        vixens.io/sizing: small
     spec:
       affinity:
         podAntiAffinity:
