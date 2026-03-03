@@ -158,6 +158,51 @@ resource "kubectl_manifest" "argocd_params_bootstrap" {
 }
 
 # ----------------------------------------------------------------------------
+# 2b. ANONYMOUS ADMIN ACCESS (OPTIONAL)
+# ----------------------------------------------------------------------------
+# When anonymous_enabled=true, configure ArgoCD for no-auth admin access
+# This requires both argocd-cm and argocd-rbac-cm to be configured
+
+resource "kubectl_manifest" "argocd_cm_anonymous" {
+  count = var.argocd_config.anonymous_enabled ? 1 : 0
+
+  yaml_body = <<-EOF
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: argocd-cm
+      namespace: ${var.namespace}
+      labels:
+        app.kubernetes.io/name: argocd-cm
+        app.kubernetes.io/part-of: argocd
+    data:
+      users.anonymous.enabled: "true"
+  EOF
+
+  depends_on = [kubectl_manifest.argocd_core]
+}
+
+resource "kubectl_manifest" "argocd_rbac_cm_anonymous" {
+  count = var.argocd_config.anonymous_enabled ? 1 : 0
+
+  yaml_body = <<-EOF
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: argocd-rbac-cm
+      namespace: ${var.namespace}
+      labels:
+        app.kubernetes.io/name: argocd-rbac-cm
+        app.kubernetes.io/part-of: argocd
+    data:
+      policy.default: role:admin
+      policy.csv: ""
+  EOF
+
+  depends_on = [kubectl_manifest.argocd_core]
+}
+
+# ----------------------------------------------------------------------------
 # 3. INFISICAL UNIVERSAL AUTH SECRET (BOOTSTRAP)
 # ----------------------------------------------------------------------------
 # Deploy Infisical credentials secret before root-app to enable InfisicalSecret CRDs
