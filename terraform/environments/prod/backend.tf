@@ -4,7 +4,7 @@ terraform {
     key    = "terraform.tfstate"
     region = "us-east-1"
 
-    endpoint   = "http://synelia.internal.truxonline.com:9000"
+    endpoint   = "http://192.168.111.69:9000"
     access_key = "terraform"
     secret_key = "terraform"
 
