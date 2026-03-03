@@ -118,6 +118,10 @@ resource "kubectl_manifest" "argocd_core" {
   for_each  = toset(local.argocd_manifests)
   yaml_body = file("${path.module}/bootstrap/manifests/${each.value}")
 
+  # Use server-side apply to take ownership from Helm without conflicts
+  server_side_apply = true
+  force_conflicts   = true
+
   # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
   # Terraform is only responsible for the INITIAL installation of the engine.
   lifecycle {
