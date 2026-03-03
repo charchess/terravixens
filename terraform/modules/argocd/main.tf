@@ -18,8 +18,14 @@ locals {
   argocd_manifests = [
     for f in fileset("${path.module}/bootstrap/manifests", "*.yaml") :
     f
-    if !contains(["applications-argoproj-io.yaml", "applicationsets-argoproj-io.yaml", "appprojects-argoproj-io.yaml"], f)
+    if !contains(["applications-argoproj-io.yaml", "applicationsets-argoproj-io.yaml", "appprojects-argoproj-io.yaml", "argocd-server-service.yaml"], f)
   ]
+
+  # Template the ArgoCD server service with environment-specific IP
+  argocd_server_service = templatefile("${path.module}/bootstrap/manifests/argocd-server-service.yaml.tpl", {
+    service_type    = var.argocd_config.service_type
+    loadbalancer_ip = var.argocd_config.loadbalancer_ip
+  })
 }
 
 # ----------------------------------------------------------------------------
@@ -117,6 +123,27 @@ resource "null_resource" "argocd_pre_destroy_cleanup" {
 resource "kubectl_manifest" "argocd_core" {
   for_each  = toset(local.argocd_manifests)
   yaml_body = file("${path.module}/bootstrap/manifests/${each.value}")
+
+  # Use server-side apply to take ownership from Helm without conflicts
+  server_side_apply = true
+  force_conflicts   = true
+
+  # CRITICAL: We ignore subsequent changes to let ArgoCD manage itself via GitOps.
+  # Terraform is only responsible for the INITIAL installation of the engine.
+  lifecycle {
+    ignore_changes = all
+  }
+
+  depends_on = [
+    kubernetes_namespace.argocd,
+    null_resource.argocd_crds,
+    var.cilium_module
+  ]
+}
+
+# ArgoCD Server Service (templated with environment-specific IP)
+resource "kubectl_manifest" "argocd_server_service" {
+  yaml_body = local.argocd_server_service
 
   # Use server-side apply to take ownership from Helm without conflicts
   server_side_apply = true
