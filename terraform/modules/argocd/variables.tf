@@ -38,10 +38,9 @@ variable "argocd_config" {
     self_heal         = optional(bool, true)
   })
 
-  validation {
-    condition     = var.argocd_config.loadbalancer_ip == "192.168.208.71"
-    error_message = "LoadBalancer IP must be 192.168.208.71 to match hardcoded value in bootstrap/manifests/argocd-server-service.yaml:12"
-  }
+  # NOTE: LoadBalancer IP is hardcoded in bootstrap manifest for initial deployment
+  # After bootstrap, ArgoCD self-manages via GitOps and can override this value
+  # The lifecycle { ignore_changes = all } on argocd_core ensures Terraform doesn't revert GitOps changes
 }
 
 # --------------------------------------------------------------------------

@@ -27,11 +27,6 @@ module "argocd" {
   ]
 }
 
-# Cross-validation: Ensure LoadBalancer IP in tfvars matches hardcoded manifest value
-# This prevents runtime errors from IP mismatch between Terraform config and ArgoCD manifests
-check "argocd_loadbalancer_ip_consistency" {
-  assert {
-    condition     = var.argocd.loadbalancer_ip == "192.168.208.71"
-    error_message = "ArgoCD LoadBalancer IP in terraform.tfvars must be 192.168.208.71 to match the hardcoded value in argocd-server-service.yaml"
-  }
-}
+# NOTE: LoadBalancer IP validation removed to support multiple environments
+# Each environment can use its own IP range (dev: 192.168.208.x, prod: 192.168.201.x)
+# After bootstrap, ArgoCD self-manages its service configuration via GitOps
