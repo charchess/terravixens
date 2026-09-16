@@ -170,20 +170,6 @@ resource "talos_machine_configuration_apply" "worker" {
   endpoint                    = data.external.node_endpoint[each.key].result.ip
 }
 
-# SOTA: Automatic CSR Approval Task during bootstrap/join
-resource "null_resource" "auto_approve_csr" {
-  depends_on = [talos_cluster_kubeconfig.this]
-  triggers = {
-    # Re-run if nodes change
-    cluster_nodes = join(",", keys(merge(var.control_plane_nodes, var.worker_nodes)))
-  }
-
-  provisioner "local-exec" {
-    # Run in background to not block Terraform wait sequences
-    command = "bash ../../../scripts/approve-csr.sh ../../../terraform/environments/dev/kubeconfig-dev &"
-  }
-}
-
 resource "talos_machine_bootstrap" "this" {
   client_configuration = talos_machine_secrets.cluster.client_configuration
   node                 = local.control_plane_vlan111_ips[keys(var.control_plane_nodes)[0]]
@@ -198,123 +184,13 @@ resource "talos_cluster_kubeconfig" "this" {
   depends_on           = [talos_machine_bootstrap.this]
 }
 
+# Keeps legacy state addresses stable while the old destructive destroy hook is
+# retired. Intentionally no provisioner and no on_destroy action: removing this
+# resource later is a state-only operation after an explicitly approved apply.
 resource "null_resource" "node_reset_on_destroy" {
   for_each = merge(var.control_plane_nodes, var.worker_nodes)
+
   triggers = {
     node_ip = lookup(merge(local.control_plane_vlan111_ips, local.worker_vlan111_ips), each.key, "")
-  }
-  provisioner "local-exec" {
-    when    = destroy
-    command = "bash ../../../scripts/talos-reset.sh ${self.triggers.node_ip}"
-  }
-}
-
-# Sequential upgrades remain unchanged as they are already robustly sequenced
-locals {
-  cp_node_names_list = sort(keys(var.control_plane_nodes))
-}
-
-resource "null_resource" "control_plane_upgrade" {
-  for_each = var.control_plane_nodes
-  triggers = {
-    talos_version     = var.talos_version
-    talos_image       = var.talos_image
-    node_ip           = local.control_plane_vlan111_ips[each.key]
-    wait_for_previous = index(local.cp_node_names_list, each.key) > 0 ? local.cp_node_names_list[index(local.cp_node_names_list, each.key) - 1] : "none"
-  }
-  depends_on = [talos_machine_bootstrap.this, talos_machine_configuration_apply.control_plane]
-  provisioner "local-exec" {
-    command = <<-EOT
-      set -e
-      TEMP_TALOSCONFIG=$(mktemp)
-      cat > $TEMP_TALOSCONFIG <<'EOF'
-${data.talos_client_configuration.this.talos_config}
-EOF
-      export TALOSCONFIG=$TEMP_TALOSCONFIG
-      IMAGE="${var.talos_image != "" ? var.talos_image : format("ghcr.io/siderolabs/installer:%s", var.talos_version)}"
-      PREVIOUS_IP="${lookup(local.control_plane_vlan111_ips, self.triggers.wait_for_previous, "")}"
-      
-      # Wait for previous node if multi-node upgrade
-      if [ "${self.triggers.wait_for_previous}" != "none" ]; then
-        echo "⏳ Waiting for previous node ($PREVIOUS_IP) to be ready..."
-        ELAPSED=0
-        MAX_WAIT=300  # 5 minutes max wait for previous node
-        until timeout 2 bash -c "echo > /dev/tcp/$PREVIOUS_IP/50000" 2>/dev/null; do 
-          sleep 10
-          ELAPSED=$((ELAPSED + 10))
-          if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "❌ Timeout waiting for previous node"
-            rm -f $TEMP_TALOSCONFIG
-            exit 1
-          fi
-        done
-        sleep 30
-      fi
-      
-      # Upgrade Talos (use --wait=false to avoid blocking on K8s Ready)
-      echo "🚀 Upgrading Talos to $IMAGE..."
-      talosctl upgrade --nodes ${self.triggers.node_ip} --endpoints ${self.triggers.node_ip} --image "$IMAGE" --preserve=true --wait=false
-      
-      # Wait for node to come back online (max 10 minutes)
-      echo "⏳ Waiting for node ${self.triggers.node_ip} to come back online..."
-      ELAPSED=0
-      MAX_WAIT=600  # 10 minutes max for node to reboot and come online
-      until timeout 2 bash -c "echo > /dev/tcp/${self.triggers.node_ip}/50000" 2>/dev/null; do 
-        sleep 10
-        ELAPSED=$((ELAPSED + 10))
-        if [ $ELAPSED -ge $MAX_WAIT ]; then
-          echo "❌ Timeout: Node did not come back online after $MAX_WAIT seconds"
-          rm -f $TEMP_TALOSCONFIG
-          exit 1
-        fi
-        echo "⏳ Still waiting... ($ELAPSED/$MAX_WAIT seconds)"
-      done
-      
-      echo "✅ Node ${self.triggers.node_ip} is online"
-      rm -f $TEMP_TALOSCONFIG
-    EOT
-  }
-}
-
-resource "null_resource" "worker_upgrade" {
-  for_each = var.worker_nodes
-  triggers = {
-    talos_version = var.talos_version
-    talos_image   = var.talos_image
-    node_ip       = local.worker_vlan111_ips[each.key]
-  }
-  depends_on = [talos_machine_configuration_apply.worker]
-  provisioner "local-exec" {
-    command = <<-EOT
-      set -e
-      TEMP_TALOSCONFIG=$(mktemp)
-      cat > $TEMP_TALOSCONFIG <<'EOF'
-${data.talos_client_configuration.this.talos_config}
-EOF
-      export TALOSCONFIG=$TEMP_TALOSCONFIG
-      IMAGE="${var.talos_image != "" ? var.talos_image : format("ghcr.io/siderolabs/installer:%s", var.talos_version)}"
-      
-      # Upgrade Talos on worker (already using --wait=false, good!)
-      echo "🚀 Upgrading worker Talos to $IMAGE..."
-      talosctl upgrade --nodes ${self.triggers.node_ip} --endpoints ${self.triggers.node_ip} --image "$IMAGE" --preserve=true --wait=false
-      
-      # Wait for worker node to come back online (max 10 minutes)
-      echo "⏳ Waiting for worker node ${self.triggers.node_ip} to come back online..."
-      ELAPSED=0
-      MAX_WAIT=600  # 10 minutes max
-      until timeout 2 bash -c "echo > /dev/tcp/${self.triggers.node_ip}/50000" 2>/dev/null; do 
-        sleep 10
-        ELAPSED=$((ELAPSED + 10))
-        if [ $ELAPSED -ge $MAX_WAIT ]; then
-          echo "❌ Timeout: Worker node did not come back online after $MAX_WAIT seconds"
-          rm -f $TEMP_TALOSCONFIG
-          exit 1
-        fi
-        echo "⏳ Still waiting... ($ELAPSED/$MAX_WAIT seconds)"
-      done
-      
-      echo "✅ Worker node ${self.triggers.node_ip} is online"
-      rm -f $TEMP_TALOSCONFIG
-    EOT
   }
 }

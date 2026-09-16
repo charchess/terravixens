@@ -67,3 +67,13 @@ output "debug_node_patches" {
   value       = { for k, v in var.control_plane_nodes : k => yamldecode(local.node_patches[k]) }
   sensitive   = false
 }
+
+output "control_plane_node_ips" {
+  description = "Control-plane Talos API addresses used by the declarative rollout"
+  value       = local.control_plane_vlan111_ips
+}
+
+output "worker_node_ips" {
+  description = "Worker Talos API addresses used by the declarative rollout"
+  value       = local.worker_vlan111_ips
+}

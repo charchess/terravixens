@@ -73,6 +73,17 @@ variable "control_plane_nodes" {
   }
 }
 
+variable "control_plane_rollout_order" {
+  description = "Explicit ordered control-plane node names for serial Talos upgrades"
+  type        = list(string)
+}
+
+variable "talos_rollout_enabled" {
+  description = "Enable live Talos version observation and serial OS convergence"
+  type        = bool
+  default     = false
+}
+
 variable "worker_nodes" {
   description = "Worker nodes configuration (optional)"
   type = map(object({
