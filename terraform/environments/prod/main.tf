@@ -14,4 +14,5 @@ module "environment" {
   paths               = var.paths
   argocd              = var.argocd
   cilium_l2           = var.cilium_l2
+  coredns_bootstrap   = var.coredns_bootstrap
 }

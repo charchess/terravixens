@@ -22,6 +22,15 @@ variable "git_branch" {
   type        = string
 }
 
+variable "coredns_bootstrap" {
+  description = "Optional UDM-only CoreDNS bootstrap. Disable before ArgoCD takes ownership."
+  type = object({
+    enabled   = optional(bool, false)
+    upstreams = optional(list(string), [])
+  })
+  default = {}
+}
+
 # --------------------------------------------------------------------------
 # CLUSTER CONFIGURATION
 # --------------------------------------------------------------------------
