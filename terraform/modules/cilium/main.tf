@@ -92,6 +92,14 @@ resource "helm_release" "cilium" {
               verdict = ["DROPPED", "ERROR"]
             })
           ]
+          # VLAN_FILTERED is high-volume background noise in prod. It remains
+          # available as an aggregate Hubble metric, but is not persisted as
+          # per-flow JSON in Loki.
+          denyList = [
+            jsonencode({
+              drop_reason_desc = ["VLAN_FILTERED"]
+            })
+          ]
           fieldMask = [
             "time",
             "source.namespace",
