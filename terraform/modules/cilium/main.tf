@@ -80,6 +80,41 @@ resource "helm_release" "cilium" {
           "http"
         ]
       }
+      export = {
+        static = {
+          enabled        = true
+          filePath       = "/var/run/cilium/hubble/failed-flows.log"
+          fileMaxSizeMb  = 10
+          fileMaxBackups = 2
+          fileCompress   = false
+          allowList = [
+            jsonencode({
+              verdict = ["DROPPED", "ERROR"]
+            })
+          ]
+          # VLAN_FILTERED is high-volume background noise in prod. It remains
+          # available as an aggregate Hubble metric, but is not persisted as
+          # per-flow JSON in Loki.
+          denyList = [
+            jsonencode({
+              drop_reason_desc = ["VLAN_FILTERED"]
+            })
+          ]
+          fieldMask = [
+            "time",
+            "source.namespace",
+            "source.pod_name",
+            "destination.namespace",
+            "destination.pod_name",
+            "l4",
+            "IP",
+            "node_name",
+            "is_reply",
+            "verdict",
+            "drop_reason_desc"
+          ]
+        }
+      }
     }
 
     operator = {
