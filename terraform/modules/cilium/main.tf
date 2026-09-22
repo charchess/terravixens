@@ -80,6 +80,33 @@ resource "helm_release" "cilium" {
           "http"
         ]
       }
+      export = {
+        static = {
+          enabled        = true
+          filePath       = "/var/run/cilium/hubble/failed-flows.log"
+          fileMaxSizeMb  = 10
+          fileMaxBackups = 2
+          fileCompress   = false
+          allowList = [
+            jsonencode({
+              verdict = ["DROPPED", "ERROR"]
+            })
+          ]
+          fieldMask = [
+            "time",
+            "source.namespace",
+            "source.pod_name",
+            "destination.namespace",
+            "destination.pod_name",
+            "l4",
+            "IP",
+            "node_name",
+            "is_reply",
+            "verdict",
+            "drop_reason_desc"
+          ]
+        }
+      }
     }
 
     operator = {
