@@ -172,18 +172,18 @@ variable "network" {
 variable "paths" {
   description = "File paths for generated configurations"
   type = object({
-    kubeconfig            = string
-    talosconfig           = string
-    cilium_ip_pool_yaml   = string
-    cilium_l2_policy_yaml = string
-    infisical_secret      = string
+    kubeconfig              = string
+    talosconfig             = string
+    cilium_ip_pool_yaml     = string
+    cilium_l2_policy_yaml   = string
+    openbao_bootstrap_token = optional(string, "../../../.secrets/staging/openbao-token.yaml")
   })
 
   default = {
-    kubeconfig            = "./kubeconfig-staging"
-    talosconfig           = "./talosconfig-staging"
-    cilium_ip_pool_yaml   = "../../../apps/cilium-lb/overlays/staging/ippool.yaml"
-    cilium_l2_policy_yaml = "../../../apps/cilium-lb/base/l2policy.yaml"
-    infisical_secret      = "../../../.secrets/staging/infisical-universal-auth.yaml"
+    kubeconfig              = "./kubeconfig-staging"
+    talosconfig             = "./talosconfig-staging"
+    cilium_ip_pool_yaml     = "../../../apps/cilium-lb/overlays/staging/ippool.yaml"
+    cilium_l2_policy_yaml   = "../../../apps/cilium-lb/base/l2policy.yaml"
+    openbao_bootstrap_token = "../../../.secrets/staging/openbao-token.yaml"
   }
 }

@@ -18,6 +18,12 @@ variable "environment" {
   type        = string
 }
 
+variable "bootstrap_seed_enabled" {
+  description = "Create Terraform ArgoCD bootstrap seeds; disable after GitOps ownership is established."
+  type        = bool
+  default     = true
+}
+
 variable "git_branch" {
   description = "Git branch for ArgoCD to track"
   type        = string
@@ -75,13 +81,16 @@ variable "root_app_template_path" {
   type        = string
 }
 
-# --------------------------------------------------------------------------
-# INFISICAL BOOTSTRAP SECRET
-# --------------------------------------------------------------------------
-variable "infisical_secret_path" {
-  description = "Path to Infisical universal auth secret YAML file (e.g., .secrets/dev/infisical-universal-auth.yaml)"
+variable "openbao_bootstrap_token_path" {
+  description = "Ignored YAML file containing stringData.token for external-secrets/openbao-token"
   type        = string
-  default     = ""
+
+  validation {
+    condition = fileexists(var.openbao_bootstrap_token_path) && can(
+      trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token)
+    ) && trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token) != ""
+    error_message = "OpenBao bootstrap token file must exist outside Git and contain a non-empty stringData.token."
+  }
 }
 
 variable "kubeconfig_path" {

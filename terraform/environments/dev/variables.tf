@@ -175,14 +175,14 @@ variable "network" {
 variable "paths" {
   description = "File paths for generated configurations"
   type = object({
-    kubeconfig       = string
-    talosconfig      = string
-    infisical_secret = string
+    kubeconfig              = string
+    talosconfig             = string
+    openbao_bootstrap_token = optional(string, "../../../.secrets/dev/openbao-token.yaml")
   })
 
   default = {
-    kubeconfig       = "./kubeconfig-dev"
-    talosconfig      = "./talosconfig-dev"
-    infisical_secret = "../../../.secrets/dev/infisical-universal-auth.yaml"
+    kubeconfig              = "./kubeconfig-dev"
+    talosconfig             = "./talosconfig-dev"
+    openbao_bootstrap_token = "../../../.secrets/dev/openbao-token.yaml"
   }
 }

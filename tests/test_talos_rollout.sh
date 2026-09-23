@@ -53,6 +53,7 @@ if "$script" >/dev/null 2>&1; then fail 'expected duplicate-name validation fail
 # Legacy state must remain tracked until explicitly retired, but must never reset a node.
 module_source="$repo_root/terraform/modules/talos/main.tf"
 grep -q 'resource "null_resource" "node_reset_on_destroy"' "$module_source" || fail 'legacy reset state holder missing'
+grep -q 'talosconfig = data.talos_client_configuration.this.talos_config' "$module_source" || fail 'legacy reset state trigger compatibility missing'
 if grep -Eq 'when[[:space:]]*=[[:space:]]*destroy|talos-reset\.sh' "$module_source"; then
   fail 'destroy-triggered Talos reset remains in module'
 fi

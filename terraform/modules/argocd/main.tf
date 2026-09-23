@@ -12,6 +12,43 @@ resource "kubernetes_namespace" "argocd" {
   metadata {
     name = "argocd"
   }
+
+  # ArgoCD and controllers own runtime metadata; this wait is client-side only.
+  lifecycle {
+    ignore_changes = [metadata, wait_for_default_service_account]
+  }
+}
+
+# External Secrets needs its namespace and OpenBao token before ArgoCD hands
+# over to GitOps. The token material stays in the ignored .secrets directory.
+# This resource owns external-secrets/openbao-token after its declarative import.
+resource "kubernetes_namespace" "external_secrets" {
+  metadata {
+    name = "external-secrets"
+  }
+}
+
+resource "kubernetes_secret_v1" "openbao_token" {
+  metadata {
+    name      = "openbao-token"
+    namespace = kubernetes_namespace.external_secrets.metadata[0].name
+  }
+
+  data = {
+    token = yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token
+  }
+
+  type                           = "Opaque"
+  wait_for_service_account_token = false
+
+  lifecycle {
+    precondition {
+      condition = fileexists(var.openbao_bootstrap_token_path) && try(
+        trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token), ""
+      ) != ""
+      error_message = "OpenBao bootstrap token file is required: ${var.openbao_bootstrap_token_path}. Create it outside Git with stringData.token before running Terraform."
+    }
+  }
 }
 
 locals {
@@ -32,6 +69,7 @@ locals {
 # 1. CRDs (apply with kubectl --server-side for large CRDs)
 # ----------------------------------------------------------------------------
 resource "null_resource" "argocd_crds" {
+  count = var.bootstrap_seed_enabled ? 1 : 0
 
   provisioner "local-exec" {
     command = <<-EOT
@@ -54,6 +92,8 @@ resource "null_resource" "argocd_crds" {
 # This prevents namespace stuck in "Terminating" state.
 
 resource "null_resource" "argocd_pre_destroy_cleanup" {
+  count = var.bootstrap_seed_enabled ? 1 : 0
+
   # Triggers ensure this resource is recreated when critical components change
   triggers = {
     kubeconfig_path = var.kubeconfig_path
@@ -121,7 +161,7 @@ resource "null_resource" "argocd_pre_destroy_cleanup" {
 # ----------------------------------------------------------------------------
 # Apply the monolith v3.3.0 manifest provided in the bootstrap directory.
 resource "kubectl_manifest" "argocd_core" {
-  for_each  = toset(local.argocd_manifests)
+  for_each  = var.bootstrap_seed_enabled ? toset(local.argocd_manifests) : toset([])
   yaml_body = file("${path.module}/bootstrap/manifests/${each.value}")
 
   # Use server-side apply to take ownership from Helm without conflicts
@@ -143,6 +183,7 @@ resource "kubectl_manifest" "argocd_core" {
 
 # ArgoCD Server Service (templated with environment-specific IP)
 resource "kubectl_manifest" "argocd_server_service" {
+  count     = var.bootstrap_seed_enabled ? 1 : 0
   yaml_body = local.argocd_server_service
 
   # Use server-side apply to take ownership from Helm without conflicts
@@ -169,6 +210,7 @@ resource "kubectl_manifest" "argocd_server_service" {
 # settings directly into the ConfigMap. This overrides any default from the manifest.
 
 resource "kubectl_manifest" "argocd_params_bootstrap" {
+  count     = var.bootstrap_seed_enabled ? 1 : 0
   yaml_body = <<-EOF
     apiVersion: v1
     kind: ConfigMap
@@ -184,6 +226,11 @@ resource "kubectl_manifest" "argocd_params_bootstrap" {
       server.disable.auth: "${var.argocd_config.disable_auth ? "true" : "false"}"
   EOF
 
+  # ArgoCD owns this ConfigMap after the initial seed.
+  lifecycle {
+    ignore_changes = all
+  }
+
   # Ensure the ConfigMap exists before we try to patch it or rely on it
   depends_on = [null_resource.argocd_crds, kubectl_manifest.argocd_core]
 }
@@ -195,7 +242,7 @@ resource "kubectl_manifest" "argocd_params_bootstrap" {
 # This requires both argocd-cm and argocd-rbac-cm to be configured
 
 resource "kubectl_manifest" "argocd_cm_anonymous" {
-  count = var.argocd_config.anonymous_enabled ? 1 : 0
+  count = var.bootstrap_seed_enabled && var.argocd_config.anonymous_enabled ? 1 : 0
 
   yaml_body = <<-EOF
     apiVersion: v1
@@ -210,11 +257,16 @@ resource "kubectl_manifest" "argocd_cm_anonymous" {
       users.anonymous.enabled: "true"
   EOF
 
+  # ArgoCD owns this ConfigMap after the initial seed.
+  lifecycle {
+    ignore_changes = all
+  }
+
   depends_on = [kubectl_manifest.argocd_core]
 }
 
 resource "kubectl_manifest" "argocd_rbac_cm_anonymous" {
-  count = var.argocd_config.anonymous_enabled ? 1 : 0
+  count = var.bootstrap_seed_enabled && var.argocd_config.anonymous_enabled ? 1 : 0
 
   yaml_body = <<-EOF
     apiVersion: v1
@@ -230,48 +282,22 @@ resource "kubectl_manifest" "argocd_rbac_cm_anonymous" {
       policy.csv: ""
   EOF
 
+  # ArgoCD owns this ConfigMap after the initial seed.
+  lifecycle {
+    ignore_changes = all
+  }
+
   depends_on = [kubectl_manifest.argocd_core]
 }
 
 # ----------------------------------------------------------------------------
-# 3. INFISICAL UNIVERSAL AUTH SECRET (BOOTSTRAP)
-# ----------------------------------------------------------------------------
-# Deploy Infisical credentials secret before root-app to enable InfisicalSecret CRDs
-# This is a prerequisite for ArgoCD to sync apps that use Infisical secrets.
-
-resource "kubernetes_secret_v1" "infisical_universal_auth" {
-  count = var.infisical_secret_path != "" ? 1 : 0
-
-  metadata {
-    name      = "infisical-universal-auth"
-    namespace = var.namespace
-
-    labels = {
-      "app"        = "infisical-operator"
-      "managed-by" = "terraform"
-    }
-  }
-
-  data = {
-    clientId     = yamldecode(file(var.infisical_secret_path)).stringData.clientId
-    clientSecret = yamldecode(file(var.infisical_secret_path)).stringData.clientSecret
-  }
-
-  type = "Opaque"
-
-  depends_on = [
-    null_resource.argocd_crds,
-    kubectl_manifest.argocd_core
-  ]
-}
-
-# ----------------------------------------------------------------------------
-# 4. ROOT APPLICATION (ACTIVATION)
+# 3. ROOT APPLICATION (ACTIVATION)
 # ----------------------------------------------------------------------------
 # This creates the Application named 'vixens-app-of-apps'.
 # It points ArgoCD to Git for full self-management.
 
 resource "kubectl_manifest" "argocd_root_app" {
+  count = var.bootstrap_seed_enabled ? 1 : 0
   yaml_body = templatefile(var.root_app_template_path, {
     environment     = var.environment
     target_revision = var.git_branch
@@ -279,9 +305,14 @@ resource "kubectl_manifest" "argocd_root_app" {
     self_heal       = var.argocd_config.self_heal
   })
 
+  # The app-of-apps becomes self-managed through GitOps after bootstrap.
+  lifecycle {
+    ignore_changes = all
+  }
+
   depends_on = [
     null_resource.argocd_crds,
     kubectl_manifest.argocd_params_bootstrap,
-    kubernetes_secret_v1.infisical_universal_auth
+    kubernetes_secret_v1.openbao_token
   ]
 }

@@ -158,16 +158,16 @@ resource "talos_machine_configuration_apply" "control_plane" {
   for_each                    = var.control_plane_nodes
   client_configuration        = talos_machine_secrets.cluster.client_configuration
   machine_configuration_input = data.talos_machine_configuration.control_plane[each.key].machine_configuration
-  node                        = data.external.node_endpoint[each.key].result.ip
-  endpoint                    = data.external.node_endpoint[each.key].result.ip
+  node                        = each.value.ip_address
+  endpoint                    = each.value.ip_address
 }
 
 resource "talos_machine_configuration_apply" "worker" {
   for_each                    = var.worker_nodes
   client_configuration        = talos_machine_secrets.cluster.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[each.key].machine_configuration
-  node                        = data.external.node_endpoint[each.key].result.ip
-  endpoint                    = data.external.node_endpoint[each.key].result.ip
+  node                        = each.value.ip_address
+  endpoint                    = each.value.ip_address
 }
 
 resource "talos_machine_bootstrap" "this" {
@@ -175,6 +175,10 @@ resource "talos_machine_bootstrap" "this" {
   node                 = local.control_plane_vlan111_ips[keys(var.control_plane_nodes)[0]]
   endpoint             = local.control_plane_vlan111_ips[keys(var.control_plane_nodes)[0]]
   depends_on           = [talos_machine_configuration_apply.control_plane]
+
+  lifecycle {
+    ignore_changes = [node, endpoint]
+  }
 }
 
 resource "talos_cluster_kubeconfig" "this" {
@@ -182,6 +186,10 @@ resource "talos_cluster_kubeconfig" "this" {
   node                 = local.control_plane_vlan111_ips[keys(var.control_plane_nodes)[0]]
   endpoint             = local.control_plane_vlan111_ips[keys(var.control_plane_nodes)[0]]
   depends_on           = [talos_machine_bootstrap.this]
+
+  lifecycle {
+    ignore_changes = [node, endpoint]
+  }
 }
 
 # Keeps legacy state addresses stable while the old destructive destroy hook is
@@ -191,6 +199,7 @@ resource "null_resource" "node_reset_on_destroy" {
   for_each = merge(var.control_plane_nodes, var.worker_nodes)
 
   triggers = {
-    node_ip = lookup(merge(local.control_plane_vlan111_ips, local.worker_vlan111_ips), each.key, "")
+    node_ip     = lookup(merge(local.control_plane_vlan111_ips, local.worker_vlan111_ips), each.key, "")
+    talosconfig = data.talos_client_configuration.this.talos_config
   }
 }

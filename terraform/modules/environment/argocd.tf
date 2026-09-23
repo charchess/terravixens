@@ -5,9 +5,10 @@
 module "argocd" {
   source = "../argocd"
 
-  chart_version = module.shared.chart_versions.argocd
-  environment   = var.environment
-  git_branch    = var.git_branch
+  chart_version          = module.shared.chart_versions.argocd
+  environment            = var.environment
+  git_branch             = var.git_branch
+  bootstrap_seed_enabled = var.argocd_bootstrap_seed_enabled
 
   argocd_config = var.argocd
 
@@ -15,12 +16,10 @@ module "argocd" {
   control_plane_tolerations = module.shared.control_plane_tolerations
   timeout                   = module.shared.timeouts.helm_install
 
-  # Infisical bootstrap secret (optional)
-  infisical_secret_path = var.paths.infisical_secret
-
-  kubeconfig_path        = var.paths.kubeconfig
-  cilium_module          = module.cilium
-  root_app_template_path = "${path.module}/../../manifests/argocd/root-app.yaml.tpl"
+  openbao_bootstrap_token_path = var.paths.openbao_bootstrap_token
+  kubeconfig_path              = var.paths.kubeconfig
+  cilium_module                = module.cilium
+  root_app_template_path       = "${path.module}/../../manifests/argocd/root-app.yaml.tpl"
 
   depends_on = [
     module.cilium

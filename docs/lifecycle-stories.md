@@ -22,7 +22,7 @@ This document defines the operational scenarios that the TerraVixens infrastruct
 
 ### 1.3 Node Reconfiguration (IP, Hostname)
 *   **Goal:** Change networking or naming without redeploying hardware.
-*   **Risk:** Changing an IP in Terraform usually triggers a `Destroy -> Create` cycle. In the current implementation, `Destroy` triggers a `talosctl reset`, which is **unacceptable** for simple renames or IP migrations.
+*   **Risk:** Changing an IP in Terraform can trigger a `Destroy -> Create` cycle. The Terraform module must never invoke `talosctl reset` as a destroy side effect for a rename or IP migration. Any reset or identity reuse is a separately approved recovery/decommission procedure.
 
 ---
 
@@ -48,8 +48,8 @@ This document defines the operational scenarios that the TerraVixens infrastruct
 *   **Requirement:** Zero-touch provisioning until ArgoCD is ready.
 
 ### 3.2 Cluster Decommissioning
-*   **Goal:** Wipe all nodes and destroy Terraform state.
-*   **Requirement:** `terraform destroy` must successfully reset all nodes to Maintenance mode.
+*   **Goal:** Retire a cluster intentionally.
+*   **Requirement:** This is a separately approved recovery/decommission runbook: preserve required backups, stop or migrate stateful workloads, reset only explicitly selected nodes, then retire Terraform state. A routine `terraform destroy` must not reset machines implicitly.
 
 ---
 

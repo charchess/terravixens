@@ -9,7 +9,7 @@ locals {
   # CHART VERSIONS - Single source of truth
   # --------------------------------------------------------------------------
   chart_versions = {
-    cilium       = "1.18.3"
+    cilium       = "1.20.2"
     argocd       = "7.7.7"
     traefik      = "25.0.0"
     cert_manager = "v1.14.4"

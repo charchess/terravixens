@@ -22,6 +22,12 @@ variable "git_branch" {
   type        = string
 }
 
+variable "argocd_bootstrap_seed_enabled" {
+  description = "Whether Terraform must create ArgoCD bootstrap seeds before GitOps takes ownership."
+  type        = bool
+  default     = true
+}
+
 variable "coredns_bootstrap" {
   description = "Optional UDM-only CoreDNS bootstrap. Disable before ArgoCD takes ownership."
   type = object({
@@ -150,8 +156,8 @@ variable "cilium_l2" {
 variable "paths" {
   description = "File paths for generated configurations"
   type = object({
-    kubeconfig       = string
-    talosconfig      = string
-    infisical_secret = string
+    kubeconfig              = string
+    talosconfig             = string
+    openbao_bootstrap_token = string
   })
 }
