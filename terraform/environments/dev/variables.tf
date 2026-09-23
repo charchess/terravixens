@@ -54,6 +54,17 @@ variable "cluster" {
 # --------------------------------------------------------------------------
 # NODES CONFIGURATION
 # --------------------------------------------------------------------------
+variable "control_plane_rollout_order" {
+  description = "Explicit ordered control-plane node names for serial Talos upgrades"
+  type        = list(string)
+}
+
+variable "talos_rollout_enabled" {
+  description = "Enable live Talos version observation and serial OS convergence"
+  type        = bool
+  default     = false
+}
+
 variable "control_plane_nodes" {
   description = "Control plane nodes configuration"
   type = map(object({
@@ -164,14 +175,14 @@ variable "network" {
 variable "paths" {
   description = "File paths for generated configurations"
   type = object({
-    kubeconfig       = string
-    talosconfig      = string
-    infisical_secret = string
+    kubeconfig              = string
+    talosconfig             = string
+    openbao_bootstrap_token = optional(string, "../../../.secrets/dev/openbao-token.yaml")
   })
 
   default = {
-    kubeconfig       = "./kubeconfig-dev"
-    talosconfig      = "./talosconfig-dev"
-    infisical_secret = "../../../.secrets/dev/infisical-universal-auth.yaml"
+    kubeconfig              = "./kubeconfig-dev"
+    talosconfig             = "./talosconfig-dev"
+    openbao_bootstrap_token = "../../../.secrets/dev/openbao-token.yaml"
   }
 }

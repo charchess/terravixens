@@ -22,6 +22,12 @@ variable "git_branch" {
   type        = string
 }
 
+variable "argocd_bootstrap_seed_enabled" {
+  description = "Whether Terraform must create ArgoCD bootstrap seeds before GitOps takes ownership."
+  type        = bool
+  default     = true
+}
+
 variable "coredns_bootstrap" {
   description = "Optional UDM-only CoreDNS bootstrap. Disable before ArgoCD takes ownership."
   type = object({
@@ -71,6 +77,17 @@ variable "control_plane_nodes" {
     condition     = length(var.control_plane_nodes) % 2 == 1
     error_message = "Control plane nodes must be an odd number (1, 3, 5) for etcd quorum"
   }
+}
+
+variable "control_plane_rollout_order" {
+  description = "Explicit ordered control-plane node names for serial Talos upgrades"
+  type        = list(string)
+}
+
+variable "talos_rollout_enabled" {
+  description = "Enable live Talos version observation and serial OS convergence"
+  type        = bool
+  default     = false
 }
 
 variable "worker_nodes" {
@@ -139,8 +156,8 @@ variable "cilium_l2" {
 variable "paths" {
   description = "File paths for generated configurations"
   type = object({
-    kubeconfig       = string
-    talosconfig      = string
-    infisical_secret = string
+    kubeconfig              = string
+    talosconfig             = string
+    openbao_bootstrap_token = string
   })
 }
