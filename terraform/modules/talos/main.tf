@@ -162,7 +162,7 @@ resource "talos_machine_configuration_apply" "control_plane" {
   machine_configuration_input = data.talos_machine_configuration.control_plane[each.key].machine_configuration
   node                        = data.external.node_endpoint[each.key].result.ip
   endpoint                    = data.external.node_endpoint[each.key].result.ip
-  apply_mode                  = data.external.node_endpoint[each.key].result.existing == "true" ? "staged" : "auto"
+  apply_mode                  = data.external.node_endpoint[each.key].result.existing == "true" ? "staged_if_needing_reboot" : "auto"
 
   on_destroy = {
     graceful = true
@@ -177,7 +177,7 @@ resource "talos_machine_configuration_apply" "worker" {
   machine_configuration_input = data.talos_machine_configuration.worker[each.key].machine_configuration
   node                        = data.external.node_endpoint[each.key].result.ip
   endpoint                    = data.external.node_endpoint[each.key].result.ip
-  apply_mode                  = data.external.node_endpoint[each.key].result.existing == "true" ? "staged" : "auto"
+  apply_mode                  = data.external.node_endpoint[each.key].result.existing == "true" ? "staged_if_needing_reboot" : "auto"
 
   on_destroy = {
     graceful = true
