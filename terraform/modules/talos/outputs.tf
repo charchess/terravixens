@@ -64,7 +64,7 @@ output "debug_vlan111_ips" {
 # Debug: Output node patches to verify nameservers are included
 output "debug_node_patches" {
   description = "Generated node patches for debugging"
-  value       = { for k, v in var.control_plane_nodes : k => yamldecode(local.node_patches[k]) }
+  value       = { for k, v in var.control_plane_nodes : k => split("\n---\n", local.node_patches[k]) }
   sensitive   = false
 }
 
