@@ -60,6 +60,7 @@ variable "control_plane_nodes" {
   type = map(object({
     name         = string
     ip_address   = string
+    delivery_ip  = string
     mac_address  = string
     install_disk = string
     nameservers  = optional(list(string), [])
@@ -95,6 +96,7 @@ variable "worker_nodes" {
   type = map(object({
     name         = string
     ip_address   = string
+    delivery_ip  = string
     mac_address  = string
     install_disk = string
     nameservers  = optional(list(string), [])

@@ -10,6 +10,6 @@ print(ip); print(talosconfig)
 ')
 ip="${values[0]}"; talosconfig="${values[1]}"
 [[ -r "$talosconfig" ]] || { printf 'talosconfig is unreadable\n' >&2; exit 1; }
-version=$(talosctl version --talosconfig "$talosconfig" --nodes "$ip" --endpoints "$ip" --short | awk '/^Server:[[:space:]]/ { print $2; exit }')
+version=$(talosctl version --talosconfig "$talosconfig" --nodes "$ip" --endpoints "$ip" --short | awk '/^[[:space:]]*Tag:[[:space:]]/ { print $2 }')
 [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { printf 'unable to obtain Talos server version\n' >&2; exit 1; }
 printf '{"version":"%s"}\n' "$version"

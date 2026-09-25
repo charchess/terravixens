@@ -8,17 +8,17 @@ printf test > "$tmp/talosconfig"; chmod 600 "$tmp/talosconfig"
 cat > "$tmp/talosctl" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'Client: v9.9.9\nServer: v1.13.0\n'
+printf 'Client:\nClient v9.9.9\nServer:\n\tNODE: 192.0.2.19\n\tTag: v1.13.0\n'
 MOCK
 chmod +x "$tmp/talosctl"
-query=$(python3 - "$tmp/talosconfig" <<'PY'
+query=$(python3 - "$tmp/talosconfig" <<'PYCODE'
 import json,sys
 print(json.dumps({'ip':'192.0.2.19','talosconfig':sys.argv[1]}))
-PY
+PYCODE
 )
 result=$(printf '%s' "$query" | PATH="$tmp:$PATH" "$script")
-python3 - "$result" <<'PY'
+python3 - "$result" <<'PYCODE'
 import json,sys
 assert json.loads(sys.argv[1]) == {'version':'v1.13.0'}
-PY
+PYCODE
 printf 'PASS: observed Talos version emits only JSON version\n'
