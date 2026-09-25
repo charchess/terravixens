@@ -31,8 +31,8 @@ locals {
           var.talos_image != "" ? { image = var.talos_image } : {}
         )
         network = merge(
+          data.external.node_endpoint[k].result.existing == "true" ? {} : { hostname = v.name },
           {
-            hostname = v.name
             interfaces = [{
               interface = v.network.interface
               dhcp      = false
@@ -78,8 +78,8 @@ locals {
           var.talos_image != "" ? { image = var.talos_image } : {}
         )
         network = merge(
+          data.external.node_endpoint[k].result.existing == "true" ? {} : { hostname = v.name },
           {
-            hostname = v.name
             interfaces = [{
               interface = v.network.interface
               dhcp      = false
