@@ -24,91 +24,95 @@ locals {
   }
 
   node_patches = {
-    for k, v in var.control_plane_nodes : k => yamlencode({
-      machine = {
-        install = merge(
-          { disk = v.install_disk },
-          var.talos_image != "" ? { image = var.talos_image } : {}
-        )
-        network = merge(
-          data.external.node_endpoint[k].result.existing == "true" ? {} : { hostname = v.name },
-          {
-            interfaces = [{
-              interface = v.network.interface
-              dhcp      = false
-              addresses = []
-              vlans = [
-                for vlan in v.network.vlans : merge(
-                  {
+    for k, v in var.control_plane_nodes : k => join("\n---\n", [
+      yamlencode({
+        machine = {
+          install = merge(
+            { disk = v.install_disk },
+            var.talos_image != "" ? { image = var.talos_image } : {}
+          )
+          network = merge(
+            {
+              interfaces = [{
+                interface = v.network.interface
+                dhcp      = false
+                addresses = []
+                vlans = [
+                  for vlan in v.network.vlans : merge(
+                    {
+                      vlanId    = vlan.vlanId
+                      addresses = vlan.addresses
+                      routes = vlan.gateway != "" ? [{
+                        network = "0.0.0.0/0"
+                        gateway = vlan.gateway
+                      }] : []
+                    },
+                    vlan.gateway == "" ? { vip = { ip = local.vip_address } } : {}
+                  )
+                ]
+              }]
+            },
+            length(v.nameservers) > 0 ? { nameservers = v.nameservers } : {}
+          )
+          kubelet = {
+            extraArgs = { "node-ip" = local.control_plane_vlan111_ips[k] }
+          }
+        }
+        cluster = {
+          network = {
+            podSubnets     = [var.pod_subnet]
+            serviceSubnets = [var.service_subnet]
+            cni            = { name = "none" }
+          }
+          proxy     = { disabled = true }
+          apiServer = { certSANs = [local.vip_address] }
+        }
+      }),
+      yamlencode({ apiVersion = "v1alpha1", kind = "HostnameConfig", hostname = v.name, auto = "off" })
+    ])
+  }
+
+  worker_patches = {
+    for k, v in var.worker_nodes : k => join("\n---\n", [
+      yamlencode({
+        machine = {
+          install = merge(
+            { disk = v.install_disk },
+            var.talos_image != "" ? { image = var.talos_image } : {}
+          )
+          network = merge(
+            {
+              interfaces = [{
+                interface = v.network.interface
+                dhcp      = false
+                addresses = []
+                vlans = [
+                  for vlan in v.network.vlans : {
                     vlanId    = vlan.vlanId
                     addresses = vlan.addresses
                     routes = vlan.gateway != "" ? [{
                       network = "0.0.0.0/0"
                       gateway = vlan.gateway
                     }] : []
-                  },
-                  vlan.gateway == "" ? { vip = { ip = local.vip_address } } : {}
-                )
-              ]
-            }]
-          },
-          length(v.nameservers) > 0 ? { nameservers = v.nameservers } : {}
-        )
-        kubelet = {
-          extraArgs = { "node-ip" = local.control_plane_vlan111_ips[k] }
+                  }
+                ]
+              }]
+            },
+            length(v.nameservers) > 0 ? { nameservers = v.nameservers } : {}
+          )
+          kubelet = {
+            extraArgs = { "node-ip" = local.worker_vlan111_ips[k] }
+          }
         }
-      }
-      cluster = {
-        network = {
-          podSubnets     = [var.pod_subnet]
-          serviceSubnets = [var.service_subnet]
-          cni            = { name = "none" }
+        cluster = {
+          network = {
+            podSubnets     = [var.pod_subnet]
+            serviceSubnets = [var.service_subnet]
+          }
         }
-        proxy     = { disabled = true }
-        apiServer = { certSANs = [local.vip_address] }
-      }
-    })
-  }
-
-  worker_patches = {
-    for k, v in var.worker_nodes : k => yamlencode({
-      machine = {
-        install = merge(
-          { disk = v.install_disk },
-          var.talos_image != "" ? { image = var.talos_image } : {}
-        )
-        network = merge(
-          data.external.node_endpoint[k].result.existing == "true" ? {} : { hostname = v.name },
-          {
-            interfaces = [{
-              interface = v.network.interface
-              dhcp      = false
-              addresses = []
-              vlans = [
-                for vlan in v.network.vlans : {
-                  vlanId    = vlan.vlanId
-                  addresses = vlan.addresses
-                  routes = vlan.gateway != "" ? [{
-                    network = "0.0.0.0/0"
-                    gateway = vlan.gateway
-                  }] : []
-                }
-              ]
-            }]
-          },
-          length(v.nameservers) > 0 ? { nameservers = v.nameservers } : {}
-        )
-        kubelet = {
-          extraArgs = { "node-ip" = local.worker_vlan111_ips[k] }
-        }
-      }
-      cluster = {
-        network = {
-          podSubnets     = [var.pod_subnet]
-          serviceSubnets = [var.service_subnet]
-        }
-      }
-    })
+      }),
+      yamlencode({ apiVersion = "v1alpha1", kind = "HostnameConfig", hostname = v.name, auto = "off" })
+    ])
   }
 }
 
