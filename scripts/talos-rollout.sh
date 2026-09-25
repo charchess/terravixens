@@ -43,7 +43,24 @@ fi
 
 server_version() {
   local ip="$1"
-  talosctl version --talosconfig "$TALOSCONFIG" --nodes "$ip" --endpoints "$ip" --short | awk '/^Server:[[:space:]]/ { print $2; exit }'
+  # --short prints a multi-line Server block: select its Tag, never the client version.
+  talosctl version --talosconfig "$TALOSCONFIG" --nodes "$ip" --endpoints "$ip" --short | awk '
+    /^Server:/ { server = 1; next }
+    server && /^[[:space:]]*Tag:[[:space:]]/ { print $2; exit }
+  '
+}
+
+health_with_retry() {
+  local ip="$1" attempt
+  # A normal Talos upgrade drops its API during reboot; retry instead of treating
+  # that expected transient connection refusal as a failed rollout.
+  for attempt in $(seq 1 "${HEALTH_RETRY_ATTEMPTS:-30}"); do
+    if talosctl health --talosconfig "$TALOSCONFIG" --nodes "$ip" --endpoints "$ip" --wait-timeout 30s; then
+      return 0
+    fi
+    sleep 5
+  done
+  return 1
 }
 
 node_is_current() {
@@ -72,7 +89,7 @@ preflight_control_plane() {
   kubectl --kubeconfig "$KUBECONFIG" get --raw=/readyz >/dev/null
   while IFS=$'\t' read -r peer_name peer_ip; do
     [[ "$peer_name" == "$target_name" ]] && continue
-    talosctl health --talosconfig "$TALOSCONFIG" --nodes "$peer_ip" --endpoints "$peer_ip" --wait-timeout "$ROLLOUT_TIMEOUT"
+    health_with_retry "$peer_ip"
     kubectl --kubeconfig "$KUBECONFIG" wait --for=condition=Ready "node/$peer_name" --timeout="$ROLLOUT_TIMEOUT"
   done <<<"$control_plane_nodes"
   talosctl etcd status --talosconfig "$TALOSCONFIG" --nodes "$target_ip" --endpoints "$target_ip"
@@ -80,14 +97,14 @@ preflight_control_plane() {
 
 wait_for_control_plane() {
   local name="$1" ip="$2"
-  talosctl health --talosconfig "$TALOSCONFIG" --nodes "$ip" --endpoints "$ip" --wait-timeout "$ROLLOUT_TIMEOUT"
+  health_with_retry "$ip"
   kubectl --kubeconfig "$KUBECONFIG" wait --for=condition=Ready "node/$name" --timeout="$ROLLOUT_TIMEOUT"
   talosctl etcd status --talosconfig "$TALOSCONFIG" --nodes "$ip" --endpoints "$ip"
 }
 
 wait_for_worker() {
   local name="$1" ip="$2"
-  talosctl health --talosconfig "$TALOSCONFIG" --nodes "$ip" --endpoints "$ip" --wait-timeout "$ROLLOUT_TIMEOUT"
+  health_with_retry "$ip"
   kubectl --kubeconfig "$KUBECONFIG" wait --for=condition=Ready "node/$name" --timeout="$ROLLOUT_TIMEOUT"
 }
 
