@@ -146,9 +146,11 @@ data "external" "node_endpoint" {
     VLAN_IP="${lookup(merge(local.control_plane_vlan111_ips, local.worker_vlan111_ips), each.key, "")}"
     MAINTENANCE_IP="${each.value.ip_address}"
     if timeout 2 bash -c "echo > /dev/tcp/$VLAN_IP/50000" 2>/dev/null; then
-      echo "{\"ip\": \"$VLAN_IP\"}"
+      # Installed nodes stage MachineConfig; maintenance stays with the health-gated rollout.
+      echo "{\"ip\": \"$VLAN_IP\", \"existing\": \"true\"}"
     else
-      echo "{\"ip\": \"$MAINTENANCE_IP\"}"
+      # Fresh maintenance/DHCP nodes retain their bootstrap behavior.
+      echo "{\"ip\": \"$MAINTENANCE_IP\", \"existing\": \"false\"}"
     fi
   EOT
   ]
@@ -158,16 +160,30 @@ resource "talos_machine_configuration_apply" "control_plane" {
   for_each                    = var.control_plane_nodes
   client_configuration        = talos_machine_secrets.cluster.client_configuration
   machine_configuration_input = data.talos_machine_configuration.control_plane[each.key].machine_configuration
-  node                        = each.value.ip_address
-  endpoint                    = each.value.ip_address
+  node                        = data.external.node_endpoint[each.key].result.ip
+  endpoint                    = data.external.node_endpoint[each.key].result.ip
+  apply_mode                  = data.external.node_endpoint[each.key].result.existing == "true" ? "staged" : "auto"
+
+  on_destroy = {
+    graceful = true
+    reboot   = false
+    reset    = false
+  }
 }
 
 resource "talos_machine_configuration_apply" "worker" {
   for_each                    = var.worker_nodes
   client_configuration        = talos_machine_secrets.cluster.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[each.key].machine_configuration
-  node                        = each.value.ip_address
-  endpoint                    = each.value.ip_address
+  node                        = data.external.node_endpoint[each.key].result.ip
+  endpoint                    = data.external.node_endpoint[each.key].result.ip
+  apply_mode                  = data.external.node_endpoint[each.key].result.existing == "true" ? "staged" : "auto"
+
+  on_destroy = {
+    graceful = true
+    reboot   = false
+    reset    = false
+  }
 }
 
 resource "talos_machine_bootstrap" "this" {

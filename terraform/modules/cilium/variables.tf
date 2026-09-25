@@ -89,3 +89,9 @@ variable "kubeconfig_path" {
   description = "Path to kubeconfig file"
   type        = string
 }
+
+variable "wait_for_cilium_crds" {
+  description = "Whether this root creates the legacy Cilium CRD wait resource"
+  type        = bool
+  default     = true
+}

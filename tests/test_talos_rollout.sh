@@ -18,7 +18,7 @@ for arg in "$@"; do [[ "$previous" == "--nodes" ]] && node="$arg"; previous="$ar
 case "$1" in
  version)
    if grep -qx "$node" "$MOCK_STATE" 2>/dev/null || [[ "$node" == "10.0.0.1" ]]; then v=v1.2.3; else v=v1.1.0; fi
-   printf 'Client: v9.9.9\nServer: %s\n' "$v" ;;
+   printf 'Client:\nTalos v9.9.9\nServer:\n\tNODE: %s\n\tTag: %s\n' "$node" "$v" ;;
  upgrade) printf 'upgrade:%s\n' "$node" >> "$MOCK_LOG"; printf '%s\n' "$node" >> "$MOCK_STATE" ;;
  health) printf 'health:%s\n' "$node" >> "$MOCK_LOG" ;;
  etcd) printf 'etcd:%s\n' "$node" >> "$MOCK_LOG" ;;
@@ -43,6 +43,8 @@ assert_eq "$(line_join '^upgrade:')" 'upgrade:10.0.0.2,upgrade:10.0.0.3'
 assert_eq "$(line_count '^health:')" 6
 assert_eq "$(line_count '^etcd:')" 4
 assert_eq "$(line_count 'kubectl:.* wait ')" 6
+grep -Fq 'server && /^[[:space:]]*Tag:' "$script" || fail 'server version parser does not select Server Tag'
+grep -Fq 'health_with_retry' "$script" || fail 'postflight retry helper missing'
 # RED requirement: each pending node needs an all-peer preflight first.
 assert_eq "$(grep -c '^preflight:' "$runout")" 2
 assert_eq "$(grep '^preflight:' "$runout" | paste -sd, -)" 'preflight:poison,preflight:powder'

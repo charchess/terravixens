@@ -18,8 +18,9 @@ tfplan
 kubeconfig-*
 talosconfig-*
 
-# Terraform lock file (commit this in production, but exclude for homelab)
+# Terraform lock file: keep roots reproducible; never track state or private tfvars.
 .terraform.lock.hcl
+!terraform/environments/*/.terraform.lock.hcl
 
 # Environment variables
 .env

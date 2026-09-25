@@ -15,7 +15,7 @@ resource "helm_release" "cilium" {
   timeout       = var.timeout
 
   values = [yamlencode({
-    installCRDs = true
+    installCRDs          = true
     kubeProxyReplacement = true
     k8sServiceHost       = "localhost"
     k8sServicePort       = 7445
@@ -140,6 +140,7 @@ resource "helm_release" "cilium" {
 # WAIT FOR CILIUM CRDs
 # --------------------------------------------------------------------------
 resource "null_resource" "wait_for_cilium_crds" {
+  count = var.wait_for_cilium_crds ? 1 : 0
   depends_on = [
     helm_release.cilium
   ]
