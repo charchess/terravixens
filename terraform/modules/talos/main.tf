@@ -148,13 +148,13 @@ data "external" "node_endpoint" {
   for_each = merge(var.control_plane_nodes, var.worker_nodes)
   program = ["bash", "-c", <<-EOT
     VLAN_IP="${lookup(merge(local.control_plane_vlan111_ips, local.worker_vlan111_ips), each.key, "")}"
-    MAINTENANCE_IP="${each.value.ip_address}"
+    DELIVERY_IP="${each.value.delivery_ip}"
     if timeout 2 bash -c "echo > /dev/tcp/$VLAN_IP/50000" 2>/dev/null; then
-      # Installed nodes stage MachineConfig; maintenance stays with the health-gated rollout.
+      # Installed nodes stage MachineConfig through their final VLAN 111 identity.
       echo "{\"ip\": \"$VLAN_IP\", \"existing\": \"true\"}"
     else
-      # Fresh maintenance/DHCP nodes retain their bootstrap behavior.
-      echo "{\"ip\": \"$MAINTENANCE_IP\", \"existing\": \"false\"}"
+      # Fresh VMs are reached through their reserved untagged DHCP delivery identity.
+      echo "{\"ip\": \"$DELIVERY_IP\", \"existing\": \"false\"}"
     fi
   EOT
   ]
