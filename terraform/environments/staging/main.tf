@@ -12,7 +12,6 @@ module "environment" {
   control_plane_nodes         = var.control_plane_nodes
   control_plane_rollout_order = var.control_plane_rollout_order
   talos_rollout_enabled       = var.talos_rollout_enabled
-  kubernetes_rollout_enabled  = var.kubernetes_rollout_enabled
   worker_nodes                = var.worker_nodes
   paths                       = var.paths
   argocd                      = var.argocd
