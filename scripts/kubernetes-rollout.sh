@@ -56,9 +56,26 @@ print(version)
 live=$(normalize_version "$live")
 comparison=$(version_cmp "$target" "$live")
 
+nodes_not_at_target() {
+  kubectl --kubeconfig "$KUBECONFIG" get nodes -o json | python3 -c '
+import json, sys
+expected = "v" + sys.argv[1]
+for item in json.load(sys.stdin).get("items", []):
+    name = item.get("metadata", {}).get("name", "<unknown>")
+    version = item.get("status", {}).get("nodeInfo", {}).get("kubeletVersion", "")
+    if version != expected:
+        print("{}={}".format(name, version or "<missing>"))
+' "$target"
+}
+
 if [[ "$comparison" == 0 ]]; then
-  printf 'Kubernetes already at v%s; skipping\n' "$target"
-  exit 0
+  drift=$(nodes_not_at_target)
+  if [[ -z "$drift" ]]; then
+    printf 'Kubernetes already at v%s; skipping\n' "$target"
+    exit 0
+  fi
+  printf 'refusing to declare Kubernetes converged: kubelet version drift: %s\n' "$(tr '\n' ' ' <<<"$drift")" >&2
+  exit 1
 fi
 if [[ "$comparison" -lt 0 ]]; then
   printf 'refusing Kubernetes downgrade: live v%s is newer than declared v%s\n' "$live" "$target" >&2
