@@ -16,6 +16,13 @@ set -euo pipefail
 printf 'kubectl:%s\n' "$*" >> "$MOCK_LOG"
 if [[ "$*" == *'version -o json'* ]]; then
   printf '{"serverVersion":{"gitVersion":"v%s"}}\n' "$(cat "$MOCK_STATE")"
+elif [[ "$*" == *'get nodes -o json'* ]]; then
+  python3 - <<'PY'
+import json, os
+versions = os.environ.get("MOCK_NODE_VERSIONS", open(os.environ["MOCK_STATE"]).read().strip()).split(",")
+items = [{"metadata": {"name": "node-%d" % i}, "status": {"nodeInfo": {"kubeletVersion": "v" + v}}} for i, v in enumerate(versions, 1)]
+print(json.dumps({"items": items}))
+PY
 fi
 MOCK
 cat > "$tmp/bin/talosctl" <<'MOCK'
@@ -50,6 +57,13 @@ if "$rollout" > "$tmp/downgrade" 2>&1; then
   printf 'FAIL: downgrade was accepted\n' >&2; exit 1
 fi
 grep -Fq 'refusing Kubernetes downgrade' "$tmp/downgrade"
+
+export KUBERNETES_VERSION=1.36.0 MOCK_NODE_VERSIONS=1.36.0,1.34.0
+if "$rollout" > "$tmp/node-drift" 2>&1; then
+  printf 'FAIL: kubelet version drift was accepted as converged\n' >&2; exit 1
+fi
+grep -Fq 'refusing to declare Kubernetes converged: kubelet version drift' "$tmp/node-drift"
+unset MOCK_NODE_VERSIONS
 
 : > "$log"
 export KUBERNETES_VERSION=1.37.0
