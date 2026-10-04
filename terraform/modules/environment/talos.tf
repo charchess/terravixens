@@ -121,3 +121,61 @@ resource "terraform_data" "talos_rollout" {
     module.talos_cluster,
   ]
 }
+
+# Kubernetes upgrades are cluster-wide Talos transactions, not per-node Terraform
+# changes. Keep this opt-in and monotonic: the script refuses a stale declared
+# version that would otherwise downgrade a newer live control plane.
+data "external" "kubernetes_observed_version" {
+  count      = var.kubernetes_rollout_enabled ? 1 : 0
+  program    = ["${local.repo_root}/scripts/kubernetes-observed-version.sh"]
+  query      = { kubeconfig = local_file.kubeconfig.filename }
+  depends_on = [local_file.kubeconfig]
+}
+
+resource "terraform_data" "kubernetes_rollout" {
+  count = var.kubernetes_rollout_enabled ? 1 : 0
+
+  input = {
+    kubernetes_version = var.cluster.kubernetes_version
+    observed_version   = data.external.kubernetes_observed_version[0].result.version
+    control_plane = [for name in var.control_plane_rollout_order : {
+      name = name
+      ip   = module.talos_cluster.control_plane_node_ips[name]
+    }]
+  }
+
+  triggers_replace = [
+    var.cluster.kubernetes_version,
+    data.external.kubernetes_observed_version[0].result.version,
+    jsonencode([for name in var.control_plane_rollout_order : {
+      name = name
+      ip   = module.talos_cluster.control_plane_node_ips[name]
+    }]),
+  ]
+
+  lifecycle {
+    precondition {
+      condition = (
+        length(var.control_plane_rollout_order) == length(var.control_plane_nodes) &&
+        length(setsubtract(toset(var.control_plane_rollout_order), toset(keys(var.control_plane_nodes)))) == 0
+      )
+      error_message = "control_plane_rollout_order must list every control-plane node exactly once."
+    }
+  }
+
+  provisioner "local-exec" {
+    command = "${local.repo_root}/scripts/kubernetes-rollout.sh"
+    environment = {
+      TALOSCONFIG         = local_file.talosconfig.filename
+      KUBECONFIG          = local_file.kubeconfig.filename
+      KUBERNETES_VERSION  = var.cluster.kubernetes_version
+      CONTROL_PLANE_NODES = jsonencode([for name in var.control_plane_rollout_order : { name = name, ip = module.talos_cluster.control_plane_node_ips[name] }])
+    }
+  }
+
+  depends_on = [
+    local_file.talosconfig,
+    local_file.kubeconfig,
+    module.talos_cluster,
+  ]
+}
