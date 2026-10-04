@@ -21,8 +21,12 @@ module "argocd" {
   cilium_module                = module.cilium
   root_app_template_path       = "${path.module}/../../manifests/argocd/root-app.yaml.tpl"
 
+  # A fresh ArgoCD repo-server needs working Pod DNS before its root Application
+  # can fetch Git. When bootstrap is disabled this terraform_data resource is
+  # absent and the dependency is a no-op.
   depends_on = [
-    module.cilium
+    module.cilium,
+    terraform_data.coredns_bootstrap,
   ]
 }
 
