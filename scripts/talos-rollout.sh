@@ -103,9 +103,19 @@ wait_for_control_plane() {
 }
 
 wait_for_worker() {
-  local name="$1" ip="$2"
-  health_with_retry "$ip"
-  kubectl --kubeconfig "$KUBECONFIG" wait --for=condition=Ready "node/$name" --timeout="$ROLLOUT_TIMEOUT"
+  local name="$1" ip="$2" attempt version
+  # talosctl health is intentionally control-plane-only. A worker is ready when
+  # its Talos API reports a server version and Kubernetes reports Node Ready.
+  for attempt in $(seq 1 "${HEALTH_RETRY_ATTEMPTS:-30}"); do
+    version=$(server_version "$ip" || true)
+    if [[ -n "$version" ]]; then
+      kubectl --kubeconfig "$KUBECONFIG" wait --for=condition=Ready "node/$name" --timeout="$ROLLOUT_TIMEOUT"
+      return 0
+    fi
+    sleep 5
+  done
+  printf 'Talos API did not return a server version for worker %s (%s)\n' "$name" "$ip" >&2
+  return 1
 }
 
 while IFS=$'\t' read -r name ip; do
