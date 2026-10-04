@@ -91,6 +91,12 @@ variable "talos_rollout_enabled" {
   default     = false
 }
 
+variable "kubernetes_rollout_enabled" {
+  description = "Enable an explicitly gated, monotonic Kubernetes control-plane rollout"
+  type        = bool
+  default     = false
+}
+
 variable "worker_nodes" {
   description = "Worker nodes configuration (optional)"
   type = map(object({
