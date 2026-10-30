@@ -66,6 +66,9 @@ locals {
           }
           proxy     = { disabled = true }
           apiServer = { certSANs = [local.vip_address] }
+          # Kubernetes control-plane state exceeds etcd's 2 GiB default quota.
+          # 4 GiB remains within Talos' recommended 8 GiB maximum.
+          etcd = { extraArgs = { quota-backend-bytes = "4294967296" } }
         }
       }),
       yamlencode({ apiVersion = "v1alpha1", kind = "HostnameConfig", hostname = v.name, auto = "off" })
