@@ -21,12 +21,15 @@ resource "terraform_data" "bootstrap_prerequisites" {
   ]
 }
 
-# k3d ships one generic local-path class. Create explicit Vixens contracts so
-# dev manifests can select deletion or retention without depending on NAS CSI.
+# k3d supplies a local-path provisioner. In this single-host test environment,
+# all platform contract names intentionally resolve to it, including RWX labels.
+# The RWX labels are local emulation only: they are neither portable nor HA.
 resource "kubernetes_storage_class_v1" "local_path_contract" {
   for_each = var.bootstrap_enabled ? {
-    "local-path-delete" = "Delete"
-    "local-path-retain" = "Retain"
+    "storage-rwo-delete" = "Delete"
+    "storage-rwo-retain" = "Retain"
+    "storage-rwx-delete" = "Delete"
+    "storage-rwx-retain" = "Retain"
   } : {}
 
   metadata {
