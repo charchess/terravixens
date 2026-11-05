@@ -21,6 +21,17 @@ variable "git_branch" {
   default     = "main"
 }
 
+variable "git_repository_url" {
+  description = "Vixens GitOps repository used by the dev root Application."
+  type        = string
+  default     = "https://github.com/charchess/vixens-core.git"
+
+  validation {
+    condition     = var.git_repository_url == "https://github.com/charchess/vixens-core.git"
+    error_message = "The dev K3d contract bootstraps only charchess/vixens-core."
+  }
+}
+
 variable "bootstrap_enabled" {
   description = "Explicitly permit the initial K3s API check and ArgoCD bootstrap. Defaults to false so plans are inert."
   type        = bool

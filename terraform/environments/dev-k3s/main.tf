@@ -46,6 +46,7 @@ module "argocd" {
   chart_version          = var.argocd_chart_version
   environment            = var.environment
   git_branch             = var.git_branch
+  git_repository_url     = var.git_repository_url
   bootstrap_seed_enabled = true
   argocd_config          = var.argocd
 
