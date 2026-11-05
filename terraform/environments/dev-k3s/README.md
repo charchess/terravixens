@@ -4,16 +4,16 @@ This root prepares the **dev** Vixens environment against an existing K3s API. I
 
 ## Safety contract
 
-- State is isolated at `terraform-state-dev/k3s/terraform.tfstate`; it never reads the legacy Talos dev state key.
+- State is intentionally local at `state/terraform.tfstate` on the Lab VM that owns the K3d target; it is excluded from Git and never reads a Talos or production state backend.
 - The Kubernetes, Helm, and kubectl providers use only the runtime-supplied K3s kubeconfig.
 - `bootstrap_enabled` defaults to `false`. A normal review plan is inert; bootstrap requires an explicit `-var='bootstrap_enabled=true'`.
-- S3 credentials are process environment variables. No credential belongs in `backend.tf`, tfvars, or Git.
+- No backend credentials exist in `backend.tf`, tfvars, or Git.
 - The initial ArgoCD service is `ClusterIP`; exposing it is a separate reviewed network change.
 - The dev storage contract is `local-path-delete` by default. Use `local-path-retain` only for state explicitly intended to survive routine dev cleanup.
 
 ## Preflight
 
-Resolve the non-secret paths and S3 credentials through the approved operator authority, then run from this directory:
+Resolve the non-secret paths through the approved Lab operator authority, then run from this directory on the Lab VM:
 
 ```bash
 terraform init -reconfigure -input=false
