@@ -1,0 +1,16 @@
+# Non-secret dev K3s configuration example.
+# Supply the kubeconfig path only on the command line or through a protected tfvars file.
+
+git_branch        = "main"
+bootstrap_enabled = false
+storage_class_name = "local-path-delete"
+
+argocd = {
+  service_type      = "ClusterIP"
+  loadbalancer_ip   = ""
+  hostname          = ""
+  insecure          = false
+  disable_auth      = false
+  anonymous_enabled = false
+  self_heal         = true
+}
