@@ -11,7 +11,7 @@ resource "k3d_cluster" "dev" {
     kubeAPI = {
       host     = "127.0.0.1"
       hostIP   = "127.0.0.1"
-      hostPort = var.api_host_port
+      hostPort = tostring(var.api_host_port)
     }
     options = {
       k3s = {
