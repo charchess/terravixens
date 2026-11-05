@@ -18,6 +18,14 @@ module "cilium" {
   wait_for_k8s_api     = null_resource.wait_for_k8s_api
 
   cilium_l2 = var.cilium_l2
+  platform = {
+    name                     = "talos"
+    k8s_service_host         = "localhost"
+    k8s_service_port         = 7445
+    kube_proxy_replacement   = true
+    l2_announcements_enabled = true
+    external_ips_enabled     = true
+  }
 
-  kubeconfig_path     = var.paths.kubeconfig
+  kubeconfig_path = var.paths.kubeconfig
 }

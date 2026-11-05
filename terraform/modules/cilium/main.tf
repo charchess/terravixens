@@ -16,12 +16,12 @@ resource "helm_release" "cilium" {
 
   values = [yamlencode({
     installCRDs          = true
-    kubeProxyReplacement = true
-    k8sServiceHost       = "localhost"
-    k8sServicePort       = 7445
+    kubeProxyReplacement = var.platform.kube_proxy_replacement
+    k8sServiceHost       = var.platform.k8s_service_host
+    k8sServicePort       = var.platform.k8s_service_port
 
     l2announcements = {
-      enabled = true
+      enabled = var.platform.l2_announcements_enabled
     }
 
     k8sClientRateLimit = {
@@ -30,7 +30,7 @@ resource "helm_release" "cilium" {
     }
 
     externalIPs = {
-      enabled = true
+      enabled = var.platform.external_ips_enabled
     }
 
     ipam = {
@@ -158,6 +158,8 @@ resource "null_resource" "wait_for_cilium_crds" {
 # CILIUM L2 ANNOUNCEMENTS RESOURCES
 # --------------------------------------------------------------------------
 resource "kubectl_manifest" "cilium_ip_pool" {
+  count = var.platform.l2_announcements_enabled ? 1 : 0
+
   yaml_body = yamlencode({
     apiVersion = "cilium.io/v2alpha1"
     kind       = "CiliumLoadBalancerIPPool"
@@ -183,6 +185,8 @@ resource "kubectl_manifest" "cilium_ip_pool" {
 }
 
 resource "kubectl_manifest" "cilium_l2_policy" {
+  count = var.platform.l2_announcements_enabled ? 1 : 0
+
   yaml_body = yamlencode({
     apiVersion = "cilium.io/v2alpha1"
     kind       = "CiliumL2AnnouncementPolicy"

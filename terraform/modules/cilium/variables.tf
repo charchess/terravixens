@@ -72,7 +72,7 @@ variable "wait_for_k8s_api" {
 # CILIUM L2 ANNOUNCEMENTS
 # --------------------------------------------------------------------------
 variable "cilium_l2" {
-  description = "Cilium L2 Announcements configuration"
+  description = "Cilium L2 Announcements configuration; required only for platforms where L2 is enabled."
   type = object({
     pool_name     = string
     pool_ips      = list(string)
@@ -80,6 +80,25 @@ variable "cilium_l2" {
     interfaces    = list(string)
     node_selector = map(string)
   })
+  default  = null
+  nullable = true
+}
+
+variable "platform" {
+  description = "Platform-specific Cilium integration settings."
+  type = object({
+    name                     = string
+    k8s_service_host         = string
+    k8s_service_port         = number
+    kube_proxy_replacement   = bool
+    l2_announcements_enabled = bool
+    external_ips_enabled     = bool
+  })
+
+  validation {
+    condition     = !var.platform.l2_announcements_enabled || var.cilium_l2 != null
+    error_message = "cilium_l2 must be set when platform.l2_announcements_enabled is true."
+  }
 }
 
 # --------------------------------------------------------------------------
