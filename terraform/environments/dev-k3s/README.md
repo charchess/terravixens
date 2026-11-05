@@ -1,6 +1,16 @@
 # Vixens dev on K3s
 
-This root prepares the **dev** Vixens environment against an existing K3s API. It does not provision K3s, Talos nodes, Cilium, a NAS, or a TrueNAS CSI driver.
+This root prepares the **dev** Vixens environment against an existing K3s API. It does not provision K3s, Talos nodes, a NAS, or a TrueNAS CSI driver.
+
+## Delivery contract
+
+Today, an approved bootstrap delivers exactly these platform contracts:
+
+1. **Storage names:** `storage-rwo-delete`, `storage-rwo-retain`, `storage-rwx-delete`, and `storage-rwx-retain`, all mapped to K3d's `rancher.io/local-path` provisioner. The RWX names are intentional single-host development emulation, not portable or highly available RWX storage.
+2. **GitOps handoff:** a bootstrapped ArgoCD instance and root Application targeting the reviewed `vixens-core` dev overlay. Terraform stops at this handoff; Vixens applications and their configuration belong to GitOps.
+3. **Network-policy parity target:** a Cilium layer is part of the desired dev contract so NetworkPolicies can be exercised under the same CNI semantics as production. It is **not delivered yet**: this root currently uses the CNI supplied by K3s. Until Cilium is added and verified, dev NetworkPolicy behavior must not be claimed equivalent to production.
+
+The contract deliberately excludes Talos lifecycle, production Cilium L2/load-balancing, NAS/TrueNAS CSI, and production state backends.
 
 ## Safety contract
 
