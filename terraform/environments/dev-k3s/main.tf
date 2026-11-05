@@ -12,6 +12,33 @@ resource "terraform_data" "k3s_api_ready" {
   }
 }
 
+resource "terraform_data" "bootstrap_prerequisites" {
+  count = var.bootstrap_enabled ? 1 : 0
+
+  depends_on = [
+    terraform_data.k3s_api_ready,
+    kubernetes_storage_class_v1.local_path_contract,
+  ]
+}
+
+# k3d ships one generic local-path class. Create explicit Vixens contracts so
+# dev manifests can select deletion or retention without depending on NAS CSI.
+resource "kubernetes_storage_class_v1" "local_path_contract" {
+  for_each = var.bootstrap_enabled ? {
+    "local-path-delete" = "Delete"
+    "local-path-retain" = "Retain"
+  } : {}
+
+  metadata {
+    name = each.key
+  }
+
+  storage_provisioner    = "rancher.io/local-path"
+  reclaim_policy         = each.value
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+}
+
 module "argocd" {
   count  = var.bootstrap_enabled ? 1 : 0
   source = "../../modules/argocd"
@@ -30,5 +57,5 @@ module "argocd" {
 
   # The existing module uses this dependency name for the network-ready gate.
   # In K3s, API readiness replaces the Talos/Cilium bootstrap dependency.
-  cilium_module = terraform_data.k3s_api_ready[0]
+  cilium_module = terraform_data.bootstrap_prerequisites[0]
 }
