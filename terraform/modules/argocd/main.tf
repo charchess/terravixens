@@ -300,6 +300,7 @@ resource "kubectl_manifest" "argocd_root_app" {
   count = var.bootstrap_seed_enabled ? 1 : 0
   yaml_body = templatefile(var.root_app_template_path, {
     environment     = var.environment
+    repo_url        = var.git_repository_url
     target_revision = var.git_branch
     overlay_path    = "argocd/overlays/${var.environment}"
     self_heal       = var.argocd_config.self_heal
