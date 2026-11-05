@@ -17,7 +17,8 @@ if grep -R -E 'talos_|module\.environment|modules/environment|modules/talos|side
 fi
 
 grep -Fq 'config_path = var.kubeconfig_path' "${env_dir}/providers.tf"
-grep -Fq 'key    = "k3s/terraform.tfstate"' "${env_dir}/backend.tf"
+grep -Fq 'backend "local"' "${env_dir}/backend.tf"
+grep -Fq 'path = "state/terraform.tfstate"' "${env_dir}/backend.tf"
 grep -Fq 'storage_class_name' "${env_dir}/variables.tf"
 grep -Fq 'local-path-delete' "${env_dir}/variables.tf"
 grep -Fq 'environment            = var.environment' "${env_dir}/main.tf"
