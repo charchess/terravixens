@@ -22,5 +22,8 @@ grep -Fq 'storage_class_name' "${env_dir}/variables.tf"
 grep -Fq 'local-path-delete' "${env_dir}/variables.tf"
 grep -Fq 'environment            = var.environment' "${env_dir}/main.tf"
 grep -Fq 'source = "../../modules/argocd"' "${env_dir}/main.tf"
+grep -Fq 'resource "kubernetes_storage_class_v1" "local_path_contract"' "${env_dir}/main.tf"
+grep -Fq '"local-path-delete" = "Delete"' "${env_dir}/main.tf"
+grep -Fq '"local-path-retain" = "Retain"' "${env_dir}/main.tf"
 
 echo "PASS: dev-k3s is a K3s-only bootstrap root with isolated state."
