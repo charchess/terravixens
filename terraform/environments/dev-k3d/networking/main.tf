@@ -8,6 +8,47 @@ resource "terraform_data" "api_ready" {
   }
 }
 
+locals {
+  coredns_k3d_corefile = <<-CORE
+    .:53 {
+        errors
+        health
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+        }
+        hosts /etc/coredns/NodeHosts {
+            ttl 60
+            reload 15s
+            fallthrough
+        }
+        prometheus :9153
+        cache 30
+        loop
+        reload
+        loadbalance
+        forward . ${join(" ", var.dns_upstreams)}
+    }
+  CORE
+}
+
+resource "kubectl_manifest" "coredns_k3d" {
+  yaml_body = yamlencode({
+    apiVersion = "v1"
+    kind       = "ConfigMap"
+    metadata = {
+      name      = "coredns"
+      namespace = "kube-system"
+    }
+    data = {
+      Corefile = local.coredns_k3d_corefile
+    }
+  })
+
+  depends_on = [terraform_data.api_ready]
+}
+
 module "cilium" {
   source = "../../../modules/cilium"
 
@@ -28,4 +69,6 @@ module "cilium" {
     l2_announcements_enabled = false
     external_ips_enabled     = false
   }
+
+  depends_on = [kubectl_manifest.coredns_k3d]
 }

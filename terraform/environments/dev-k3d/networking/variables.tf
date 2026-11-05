@@ -6,6 +6,17 @@ variable "k8s_service_host" {
   type = string
 }
 
+variable "dns_upstreams" {
+  description = "Reachable DNS resolvers used by CoreDNS on the K3d platform."
+  type        = list(string)
+  default     = ["192.168.200.69", "1.1.1.1"]
+
+  validation {
+    condition     = length(var.dns_upstreams) > 0
+    error_message = "dns_upstreams must contain at least one reachable resolver."
+  }
+}
+
 variable "cilium_chart_version" {
   type    = string
   default = "1.20.2"
