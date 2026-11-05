@@ -12,7 +12,14 @@ The roots are intentionally separate because Kubernetes and Helm providers must 
 - `networking/` owns Cilium. K3d disables Flannel, the K3s NetworkPolicy controller, and kube-proxy; Cilium uses the K3d-internal API endpoint and kube-proxy replacement. It does not create production L2/pool resources.
 - `gitops/` owns the four local-path storage contract names, the dev-scoped OpenBao bootstrap secret, ArgoCD, and the root Application. It refuses bootstrap until Cilium is Ready.
 
-Use `scripts/dev-k3d-apply.sh` only from the Lab runner. It applies these roots in order and never reads Talos or production state.
+Use the single operational entrypoint from the Lab runner:
+
+```bash
+./scripts/dev-k3d apply
+./scripts/dev-k3d destroy
+```
+
+`destroy` preserves Terraform's normal confirmation prompts but handles the safe internal order itself: GitOps, then Cilium/networking, then the K3d cluster. It never reads Talos or production state.
 
 ## State recovery
 
