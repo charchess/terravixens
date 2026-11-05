@@ -45,13 +45,18 @@ variable "openbao_bootstrap_token_path" {
 }
 
 variable "storage_class_name" {
-  description = "Dev storage contract consumed by Vixens overlays; K3s local-path only."
+  description = "Dev storage contract resolved to local-path on the single-host test target."
   type        = string
-  default     = "local-path-delete"
+  default     = "storage-rwo-delete"
 
   validation {
-    condition     = contains(["local-path-delete", "local-path-retain"], var.storage_class_name)
-    error_message = "dev-k3s storage must be local-path-delete or local-path-retain."
+    condition = contains([
+      "storage-rwo-delete",
+      "storage-rwo-retain",
+      "storage-rwx-delete",
+      "storage-rwx-retain",
+    ], var.storage_class_name)
+    error_message = "dev-k3s storage must use a declared storage-rwo-* or storage-rwx-* contract."
   }
 }
 

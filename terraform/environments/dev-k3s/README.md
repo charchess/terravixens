@@ -9,7 +9,7 @@ This root prepares the **dev** Vixens environment against an existing K3s API. I
 - `bootstrap_enabled` defaults to `false`. A normal review plan is inert; bootstrap requires an explicit `-var='bootstrap_enabled=true'`.
 - No backend credentials exist in `backend.tf`, tfvars, or Git.
 - The initial ArgoCD service is `ClusterIP`; exposing it is a separate reviewed network change.
-- The dev storage contract is `local-path-delete` by default. Use `local-path-retain` only for state explicitly intended to survive routine dev cleanup.
+- The dev target publishes all four `storage-rwo-*` and `storage-rwx-*` contract names over `rancher.io/local-path`. On this single-host K3d target, `storage-rwx-*` is deliberate local emulation only, not portable or HA.
 
 ## Preflight
 
