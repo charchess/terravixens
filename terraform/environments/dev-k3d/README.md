@@ -1,26 +1,25 @@
-# Vixens dev K3d platform lifecycle
+# Dev K3d platform
 
-Dev mirrors the production ownership order while replacing Talos machines with a Terraform-owned K3d cluster:
-
-```text
-K3d cluster -> Cilium -> Storage and ArgoCD bootstrap -> vixens-core GitOps
-```
-
-The roots are intentionally separate because Kubernetes and Helm providers must not initialize before K3d has created a reachable API and a protected kubeconfig.
-
-- `cluster/` owns only Docker/K3d lifecycle and writes the runner-local `0600` kubeconfig.
-- `networking/` owns Cilium. K3d disables Flannel, the K3s NetworkPolicy controller, and kube-proxy; Cilium uses the K3d-internal API endpoint and kube-proxy replacement. It does not create production L2/pool resources.
-- `gitops/` owns the four local-path storage contract names, the dev-scoped OpenBao bootstrap secret, ArgoCD, and the root Application. It refuses bootstrap until Cilium is Ready.
-
-Use the single operational entrypoint from the Lab runner:
+This is one self-contained Terraform root for the disposable Vixens development platform.
 
 ```bash
-./scripts/dev-k3d apply
-./scripts/dev-k3d destroy
+cd terraform/environments/dev-k3d
+terraform init
+terraform apply
+terraform destroy
 ```
 
-`destroy` preserves Terraform's normal confirmation prompts but handles the safe internal order itself: GitOps, then Cilium/networking, then the K3d cluster. It never reads Talos or production state.
+`apply` creates the `vixens-dev` K3d cluster, writes its generated kubeconfig to `.runtime/kubeconfig.yaml`, waits for the API, then installs Cilium, the four dev storage-class contracts, OpenBao bootstrap material, ArgoCD, and the GitOps root Application.
 
-## State recovery
+`destroy` removes that same Terraform graph and finally removes the K3d cluster. No `kubeconfig_path` input exists: the generated credential is internal to this root and is stored as a sensitive Terraform value plus a `0600` local runtime file.
 
-The pre-refactor `dev-k3s` state was quarantined on the Lab runner after the K3d cluster disappeared. Do not apply or destroy that old root. A new cluster/networking/gitops lifecycle starts from fresh per-root states; only resources proven live may ever be imported into a new root.
+The only out-of-Git prerequisite is the existing `~/.secrets/vixens-dev/openbao-token.yaml`, mode `0600`:
+
+```yaml
+stringData:
+  token: <dev-openbao-token>
+```
+
+This token remains outside Git. Its path is deterministic for the account running Terraform and is not an input variable.
+
+The old `cluster/`, `networking/`, and `gitops/` roots are retired. Do not apply them once this root is adopted.
