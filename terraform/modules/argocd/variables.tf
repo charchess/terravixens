@@ -85,18 +85,7 @@ variable "openbao_bootstrap_token_path" {
   description = "Ignored YAML file containing stringData.token for external-secrets/openbao-token"
   type        = string
 
-  validation {
-    condition = fileexists(var.openbao_bootstrap_token_path) && can(
-      trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token)
-    ) && trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token) != ""
-    error_message = <<-EOT
-      OpenBao bootstrap input is missing or invalid: ${var.openbao_bootstrap_token_path}
-      Create this mode-0600 file outside Git with exactly this YAML shape:
 
-      stringData:
-        token: <dev-openbao-token>
-    EOT
-  }
 }
 
 variable "kubeconfig_path" {

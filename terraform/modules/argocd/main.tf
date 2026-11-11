@@ -28,6 +28,15 @@ resource "kubernetes_namespace" "external_secrets" {
   }
 }
 
+locals {
+  # Decode the ignored bootstrap input once. Invalid, missing, or incomplete YAML
+  # becomes an empty value so the resource precondition emits the stable contract error.
+  openbao_bootstrap_token = try(
+    trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token),
+    "",
+  )
+}
+
 resource "kubernetes_secret_v1" "openbao_token" {
   metadata {
     name      = "openbao-token"
@@ -35,7 +44,7 @@ resource "kubernetes_secret_v1" "openbao_token" {
   }
 
   data = {
-    token = yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token
+    token = local.openbao_bootstrap_token
   }
 
   type                           = "Opaque"
@@ -43,10 +52,14 @@ resource "kubernetes_secret_v1" "openbao_token" {
 
   lifecycle {
     precondition {
-      condition = fileexists(var.openbao_bootstrap_token_path) && try(
-        trimspace(yamldecode(file(var.openbao_bootstrap_token_path)).stringData.token), ""
-      ) != ""
-      error_message = "OpenBao bootstrap token file is required: ${var.openbao_bootstrap_token_path}. Create it outside Git with stringData.token before running Terraform."
+      condition     = local.openbao_bootstrap_token != ""
+      error_message = <<-EOT
+        OpenBao bootstrap input is missing or invalid: ${var.openbao_bootstrap_token_path}
+        Create this mode-0600 file outside Git with exactly this YAML shape:
+
+        stringData:
+          token: <dev-openbao-token>
+      EOT
     }
   }
 }

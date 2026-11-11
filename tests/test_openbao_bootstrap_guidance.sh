@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-source_file="${root}/terraform/modules/argocd/variables.tf"
+source_file="${root}/terraform/modules/argocd/main.tf"
 
 grep -Fq 'OpenBao bootstrap input is missing or invalid' "${source_file}"
 grep -Fq 'stringData:' "${source_file}"
