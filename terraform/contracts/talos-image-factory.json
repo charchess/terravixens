@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "scope": "production",
+  "required_extensions": [
+    "siderolabs/iscsi-tools"
+  ],
+  "installer_image_template": "https://factory.talos.dev/installer/{schematic_id}:{talos_version}",
+  "migration_policy": {
+    "current_image_source": "protected production tfvars talos_image URL",
+    "provider_generation": "separate approved migration only",
+    "machine_configuration_apply": "must not appear in the first equivalence plan"
+  }
+}
