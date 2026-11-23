@@ -1,0 +1,64 @@
+name: Repository validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+      - name: Verify repository baseline
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f AGENTS.md
+          test -f TESTING.md
+          git diff --check HEAD^ HEAD
+      - name: Reject tracked generated runtime material
+        run: |
+          set -euo pipefail
+          forbidden=$(git ls-files | grep -E '(^|/)(terraform\.tfstate|.*\.tfstate(\..*)?|kubeconfig[^/]*|talosconfig[^/]*)$' || true)
+          test -z "$forbidden" || {
+            printf '%s\n' 'tracked runtime material is forbidden:' >&2
+            printf '%s\n' "$forbidden" >&2
+            exit 1
+          }
+
+  terraform-format:
+    name: Terraform format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.10.5
+          terraform_wrapper: false
+      - name: Require canonical Terraform formatting
+        run: terraform fmt -check -recursive
+
+  validation-summary:
+    name: Validation Summary
+    if: always()
+    needs: [repository-hygiene, terraform-format]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail closed on a non-success prerequisite
+        env:
+          HYGIENE: ${{ needs.repository-hygiene.result }}
+          TERRAFORM_FORMAT: ${{ needs.terraform-format.result }}
+        run: |
+          test "$HYGIENE" = success
+          test "$TERRAFORM_FORMAT" = success
